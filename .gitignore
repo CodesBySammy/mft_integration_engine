@@ -1,0 +1,57 @@
+# ==============================================================================
+# MFT Enterprise Integration Engine - .gitignore
+# ==============================================================================
+
+# Maven Build Artifacts
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Java / JVM
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+**/logs/
+**/sftpgo.log
+
+# SFTPGo Binary & Databases (SFTPGo binary is auto-downloaded by setup.bat)
+**/sftpgo.exe
+**/sftpgo.zip
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/sftpgo/data/
+**/instance-*/sftpgo.db*
+**/instance-*/data/
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+*.settings/
+
+# OS Specific
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# MFT Workspace Runtime Transfers (Preserve folder structure, ignore contents)
+workspace/downloads/*
+workspace/staging/*
+workspace/output/*
+workspace/quarantine/*
+workspace/status/*.json
+!workspace/downloads/.gitkeep
+!workspace/staging/.gitkeep
+!workspace/output/.gitkeep
+!workspace/quarantine/.gitkeep
+!workspace/status/.gitkeep

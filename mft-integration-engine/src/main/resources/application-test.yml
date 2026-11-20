@@ -1,0 +1,32 @@
+# Test profile for automated unit testing
+mft:
+  scheduling:
+    enabled: false
+  connections:
+    TEST_SOURCE:
+      connection-id: TEST_SOURCE
+      connection-type: SFTP
+      host: 127.0.0.1
+      port: 2022
+      username: test_user
+      password: test_password
+      remote-base-directory: /upload
+      authentication-type: PASSWORD
+      host-key-verification-mode: ACCEPT_ALL_DEV_ONLY
+      connection-timeout-ms: 5000
+      session-timeout-ms: 10000
+      enabled: true
+
+    TEST_DEST:
+      connection-id: TEST_DEST
+      connection-type: SFTP
+      host: 127.0.0.1
+      port: 2222
+      username: test_dest_user
+      password: test_dest_password
+      remote-base-directory: /incoming
+      authentication-type: PASSWORD
+      host-key-verification-mode: ACCEPT_ALL_DEV_ONLY
+      connection-timeout-ms: 5000
+      session-timeout-ms: 10000
+      enabled: true

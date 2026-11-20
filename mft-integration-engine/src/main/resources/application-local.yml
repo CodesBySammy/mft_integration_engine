@@ -1,0 +1,63 @@
+# Local developer profile connecting to two SFTPGo instances (Server A: 2022, Server B: 2222)
+# Passwords should be supplied via environment variables:
+#   $env:SFTP_SOURCE_PASSWORD="your-password"
+#   $env:SFTP_DESTINATION_PASSWORD="your-password"
+
+mft:
+  connections:
+    C_FILE_IN:
+      connection-id: C_FILE_IN
+      connection-type: SFTP
+      host: ${SFTP_SOURCE_HOST:localhost}
+      port: ${SFTP_SOURCE_PORT:2022}
+      username: ${SFTP_SOURCE_USERNAME:mft_source}
+      password: ${SFTP_SOURCE_PASSWORD:source_pass}
+      password-secret-ref: SFTP_SOURCE_PASSWORD
+      remote-base-directory: /
+      authentication-type: PASSWORD
+      host-key-verification-mode: ACCEPT_ALL_DEV_ONLY
+      connection-timeout-ms: 10000
+      session-timeout-ms: 30000
+      enabled: true
+
+    C_FILE_OUT:
+      connection-id: C_FILE_OUT
+      connection-type: SFTP
+      host: ${SFTP_DESTINATION_HOST:localhost}
+      port: ${SFTP_DESTINATION_PORT:2222}
+      username: ${SFTP_DESTINATION_USERNAME:mft_destination}
+      password: ${SFTP_DESTINATION_PASSWORD:dest_pass}
+      password-secret-ref: SFTP_DESTINATION_PASSWORD
+      remote-base-directory: /
+      authentication-type: PASSWORD
+      host-key-verification-mode: ACCEPT_ALL_DEV_ONLY
+      connection-timeout-ms: 10000
+      session-timeout-ms: 30000
+      enabled: true
+
+  routes:
+    R_RAW_COPY:
+      route-id: R_RAW_COPY
+      source-connection-id: C_FILE_IN
+      destination-connection-id: C_FILE_OUT
+      processing-mode: RAW_COPY
+      source-directory: /upload
+      source-pattern: "*.txt"
+      destination-directory: /incoming
+      checksum-algorithm: SHA_256
+      retry-limit: 3
+      allow-reprocessing: false
+      enabled: true
+
+    R_TRANSFORM:
+      route-id: R_TRANSFORM
+      source-connection-id: C_FILE_IN
+      destination-connection-id: C_FILE_OUT
+      processing-mode: TRANSFORM
+      source-directory: /upload
+      source-pattern: "*.dat"
+      destination-directory: /incoming
+      checksum-algorithm: SHA_256
+      retry-limit: 3
+      allow-reprocessing: false
+      enabled: true

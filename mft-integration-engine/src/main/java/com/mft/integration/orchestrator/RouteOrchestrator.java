@@ -1,0 +1,349 @@
+package com.mft.integration.orchestrator;
+
+import com.mft.integration.adapter.model.RemoteFileInfo;
+import com.mft.integration.adapter.model.TransferResult;
+import com.mft.integration.adapter.read.ReadAdapter;
+import com.mft.integration.adapter.write.WriteAdapter;
+import com.mft.integration.audit.AuditService;
+import com.mft.integration.checksum.ChecksumService;
+import com.mft.integration.exception.MftException;
+import com.mft.integration.idempotency.IdempotencyKey;
+import com.mft.integration.idempotency.IdempotencyService;
+import com.mft.integration.processing.RawCopyProcessor;
+import com.mft.integration.processing.TransformationProcessor;
+import com.mft.integration.retry.RetryManager;
+import com.mft.integration.retry.RetryPolicy;
+import com.mft.integration.status.TransferRun;
+import com.mft.integration.status.TransferStatus;
+import com.mft.integration.status.TransferStatusService;
+import com.mft.integration.workspace.LocalWorkspaceService;
+import com.mft.integration.workspace.WorkspaceDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Main route orchestration engine.
+ * Coordinates ReadAdapter, WriteAdapter, Processing (RAW_COPY, TRANSFORM),
+ * Idempotency checking, Retry policies, Status tracking, and Audit logging.
+ */
+@Service
+public class RouteOrchestrator {
+
+    private static final Logger log = LoggerFactory.getLogger(RouteOrchestrator.class);
+
+    private final RouteRegistry routeRegistry;
+    private final ReadAdapter readAdapter;
+    private final WriteAdapter writeAdapter;
+    private final RawCopyProcessor rawCopyProcessor;
+    private final TransformationProcessor transformationProcessor;
+    private final LocalWorkspaceService workspaceService;
+    private final ChecksumService checksumService;
+    private final IdempotencyService idempotencyService;
+    private final RetryManager retryManager;
+    private final TransferStatusService statusService;
+    private final AuditService auditService;
+
+    public RouteOrchestrator(RouteRegistry routeRegistry,
+                             ReadAdapter readAdapter,
+                             WriteAdapter writeAdapter,
+                             RawCopyProcessor rawCopyProcessor,
+                             TransformationProcessor transformationProcessor,
+                             LocalWorkspaceService workspaceService,
+                             ChecksumService checksumService,
+                             IdempotencyService idempotencyService,
+                             RetryManager retryManager,
+                             TransferStatusService statusService,
+                             AuditService auditService) {
+        this.routeRegistry = routeRegistry;
+        this.readAdapter = readAdapter;
+        this.writeAdapter = writeAdapter;
+        this.rawCopyProcessor = rawCopyProcessor;
+        this.transformationProcessor = transformationProcessor;
+        this.workspaceService = workspaceService;
+        this.checksumService = checksumService;
+        this.idempotencyService = idempotencyService;
+        this.retryManager = retryManager;
+        this.statusService = statusService;
+        this.auditService = auditService;
+    }
+
+    public RouteExecutionResult executeRoute(String routeId) {
+        return executeRoute(routeId, null);
+    }
+
+    public RouteExecutionResult executeRoute(String routeId, String patternOverride) {
+        RouteDefinition route = routeRegistry.getRoute(routeId);
+        String runId = generateRunId(routeId);
+        Instant startTime = Instant.now();
+
+        RetryPolicy routeRetryPolicy = new RetryPolicy(
+                route.getRetryLimit(),
+                route.getRetryInitialDelayMs(),
+                route.getRetryMultiplier(),
+                10000L,
+                0.1
+        );
+
+        log.info("Starting execution: route=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
+                routeId, runId, route.getProcessingMode(), route.isAllowReprocessing());
+        auditService.recordEvent(runId, routeId, "ROUTE_START", null, null, "STARTED", null,
+                "Route execution initiated for " + route.getProcessingMode());
+
+        String effectivePattern = (patternOverride != null && !patternOverride.isBlank())
+                ? patternOverride
+                : route.getSourcePattern();
+
+        // Step 1: File Discovery on Source SFTP (with retry)
+        List<RemoteFileInfo> discoveredFiles;
+        try {
+            discoveredFiles = retryManager.execute(
+                    "DISCOVERY",
+                    runId,
+                    routeId,
+                    routeRetryPolicy,
+                    () -> readAdapter.discoverFiles(
+                            route.getSourceConnectionId(),
+                            route.getSourceDirectory(),
+                            effectivePattern
+                    )
+            );
+        } catch (Exception e) {
+            log.error("File discovery failed for route [{}] on [{}]: {}", routeId, route.getSourceConnectionId(), e.getMessage());
+            auditService.recordEvent(runId, routeId, "DISCOVERY_FAILED", null, null, "FAILED", "DISCOVERY_ERROR", e.getMessage());
+            return new RouteExecutionResult(runId, routeId, false, 0, 0, 0, 0, startTime, Instant.now(),
+                    "Discovery failed: " + e.getMessage(), List.of());
+        }
+
+        if (discoveredFiles.isEmpty()) {
+            log.info("No files matching pattern [{}] discovered on [{}:{}]",
+                    effectivePattern, route.getSourceConnectionId(), route.getSourceDirectory());
+            return new RouteExecutionResult(runId, routeId, true, 0, 0, 0, 0, startTime, Instant.now(),
+                    "No files found matching pattern: " + effectivePattern, List.of());
+        }
+
+        List<TransferRun> completedRuns = new ArrayList<>();
+        int successCount = 0;
+        int failureCount = 0;
+        int skippedCount = 0;
+
+        // Step 2: Process each discovered file
+        for (RemoteFileInfo remoteFile : discoveredFiles) {
+            String itemRunId = runId + "-" + remoteFile.getFilename();
+            TransferRun transferRun = new TransferRun(
+                    itemRunId,
+                    routeId,
+                    route.getSourceConnectionId(),
+                    route.getDestinationConnectionId(),
+                    remoteFile.getFilename()
+            );
+            transferRun.setDestinationFilename(remoteFile.getFilename());
+
+            try {
+                boolean transferred = processSingleFile(route, routeRetryPolicy, transferRun, remoteFile);
+                if (transferred) {
+                    successCount++;
+                    statusService.registerRun(transferRun);
+                    completedRuns.add(transferRun);
+                } else {
+                    skippedCount++;
+                    completedRuns.add(transferRun);
+                    // Do not save duplicate skip run to statusService to prevent flooding status history
+                }
+            } catch (Exception e) {
+                log.error("Failed transfer of file [{}] in run [{}]: {}", remoteFile.getFilename(), runId, e.getMessage());
+                failureCount++;
+                transferRun.setStatus(TransferStatus.FAILED);
+                transferRun.setEndTime(Instant.now());
+                transferRun.setErrorCode("TRANSFER_FAILED");
+                transferRun.setErrorMessage(e.getMessage());
+                statusService.registerRun(transferRun);
+                auditService.recordEvent(itemRunId, routeId, "FILE_TRANSFER_FAILED",
+                        remoteFile.getFilename(), null, "FAILED", "TRANSFER_FAILED", e.getMessage());
+                completedRuns.add(transferRun);
+            }
+        }
+
+        Instant endTime = Instant.now();
+        boolean overallSuccess = failureCount == 0;
+        String summary = String.format("Completed route [%s]. Discovered: %d, Transferred: %d, Skipped: %d, Failed: %d",
+                routeId, discoveredFiles.size(), successCount, skippedCount, failureCount);
+
+        log.info(summary);
+        auditService.recordEvent(runId, routeId, "ROUTE_COMPLETED", null, null,
+                overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", null, summary);
+
+        return new RouteExecutionResult(runId, routeId, overallSuccess, discoveredFiles.size(),
+                successCount, failureCount, skippedCount, startTime, endTime, summary, completedRuns);
+    }
+
+    /**
+     * Processes a single file. Returns true if transferred, false if skipped due to idempotency.
+     */
+    private boolean processSingleFile(RouteDefinition route, RetryPolicy retryPolicy,
+                                      TransferRun transferRun, RemoteFileInfo remoteFile) throws Exception {
+        String filename = remoteFile.getFilename();
+        Path localDownloadPath = workspaceService.resolvePath(WorkspaceDirectory.DOWNLOADS, filename);
+
+        // 1. Download with retry
+        retryManager.execute(
+                "DOWNLOAD",
+                transferRun.getRunId(),
+                route.getRouteId(),
+                retryPolicy,
+                () -> {
+                    readAdapter.downloadFile(route.getSourceConnectionId(), remoteFile.getRemotePath(), localDownloadPath, true);
+                    return null;
+                }
+        );
+
+        // 2. Checksum and Idempotency verification
+        long actualSize = Files.size(localDownloadPath);
+        String sourceChecksum = checksumService.calculateChecksum(localDownloadPath, route.getChecksumAlgorithm());
+        transferRun.setSourceChecksum(sourceChecksum);
+
+        IdempotencyKey idempotencyKey = new IdempotencyKey(
+                route.getRouteId(),
+                route.getSourceConnectionId(),
+                remoteFile.getRemotePath(),
+                actualSize,
+                sourceChecksum
+        );
+
+        // Check if duplicate
+        if (idempotencyService.isAlreadyProcessed(idempotencyKey) && !route.isAllowReprocessing()) {
+            log.debug("Duplicate file detected for route [{}] file [{}] (checksum: {}). Skipping transfer to destination.",
+                    route.getRouteId(), filename, sourceChecksum);
+            transferRun.setStatus(TransferStatus.SKIPPED_DUPLICATE);
+            transferRun.setEndTime(Instant.now());
+            return false;
+        }
+
+        // Register in-progress idempotency
+        idempotencyService.registerTransfer(idempotencyKey, transferRun.getRunId());
+
+        try {
+            // 3. Validate & Process
+            statusService.updateStatus(transferRun.getRunId(), TransferStatus.PROCESSING);
+
+            if (route.getProcessingMode() == ProcessingMode.RAW_COPY) {
+                RawCopyProcessor.RawCopyResult result = rawCopyProcessor.process(localDownloadPath, route.getChecksumAlgorithm());
+                Path outputFile = result.outputFile();
+                String checksum = result.checksum();
+                transferRun.setOutputChecksum(checksum);
+
+                // Publish output file with retry
+                TransferResult pubResult = retryManager.execute(
+                        "PUBLISH",
+                        transferRun.getRunId(),
+                        route.getRouteId(),
+                        retryPolicy,
+                        () -> writeAdapter.publishFile(
+                                route.getDestinationConnectionId(),
+                                outputFile,
+                                route.getDestinationDirectory(),
+                                filename,
+                                true
+                        )
+                );
+
+                transferRun.setBytesTransferred(pubResult.getBytesTransferred());
+                transferRun.setStatus(TransferStatus.COMPLETED);
+                transferRun.setEndTime(Instant.now());
+
+                idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
+
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), "TRANSFER_COMPLETED",
+                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
+                        "Transferred " + pubResult.getBytesTransferred() + " bytes. Checksum: " + checksum);
+
+            } else if (route.getProcessingMode() == ProcessingMode.TRANSFORM) {
+                TransformationProcessor.TransformationResult result = transformationProcessor.transform(
+                        localDownloadPath,
+                        route.getRouteId(),
+                        transferRun.getRunId()
+                );
+
+                // Publish Phase A: Transformed data file (with .part rename) with retry
+                TransferResult pubResult = retryManager.execute(
+                        "PUBLISH_DATA",
+                        transferRun.getRunId(),
+                        route.getRouteId(),
+                        retryPolicy,
+                        () -> writeAdapter.publishFile(
+                                route.getDestinationConnectionId(),
+                                result.outputFile(),
+                                route.getDestinationDirectory(),
+                                result.outputFile().getFileName().toString(),
+                                true
+                        )
+                );
+
+                // Publish Phase B: Checksum companion file (.sha256)
+                retryManager.execute(
+                        "PUBLISH_COMPANION",
+                        transferRun.getRunId(),
+                        route.getRouteId(),
+                        retryPolicy,
+                        () -> writeAdapter.publishFile(
+                                route.getDestinationConnectionId(),
+                                result.companionFile(),
+                                route.getDestinationDirectory(),
+                                result.companionFile().getFileName().toString(),
+                                true
+                        )
+                );
+
+                // Publish Phase C: Manifest file (.manifest.json)
+                retryManager.execute(
+                        "PUBLISH_MANIFEST",
+                        transferRun.getRunId(),
+                        route.getRouteId(),
+                        retryPolicy,
+                        () -> writeAdapter.publishFile(
+                                route.getDestinationConnectionId(),
+                                result.manifestFile(),
+                                route.getDestinationDirectory(),
+                                result.manifestFile().getFileName().toString(),
+                                true
+                        )
+                );
+
+                transferRun.setRecordCount(result.recordCount());
+                transferRun.setBytesTransferred(pubResult.getBytesTransferred());
+                transferRun.setOutputChecksum(result.outputChecksum());
+                transferRun.setDestinationFilename(result.outputFile().getFileName().toString());
+                transferRun.setStatus(TransferStatus.COMPLETED);
+                transferRun.setEndTime(Instant.now());
+
+                idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
+
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), "TRANSFORMATION_COMPLETED",
+                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
+                        String.format("Transformed %d records (Total: %s). Checksum: %s",
+                                result.recordCount(), result.totalAmount(), result.outputChecksum()));
+            } else {
+                throw new MftException("UNSUPPORTED_MODE", "Processing mode not supported: " + route.getProcessingMode());
+            }
+
+            return true;
+        } catch (Exception e) {
+            idempotencyService.markFailed(idempotencyKey, e.getMessage());
+            throw e;
+        }
+    }
+
+    private String generateRunId(String routeId) {
+        String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(Instant.now().atZone(java.time.ZoneOffset.UTC));
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        return String.format("%s_%s_%s", routeId, timestamp, shortUuid);
+    }
+}

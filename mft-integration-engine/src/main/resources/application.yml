@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: mft-integration-engine
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.mft.integration: DEBUG
+    org.apache.sshd: INFO
+    org.springframework.integration: INFO
+
+mft:
+  scheduling:
+    enabled: true
+    fixed-delay-ms: 5000
