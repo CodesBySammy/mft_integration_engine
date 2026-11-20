@@ -176,7 +176,10 @@ Write-Host "  OK: Workspace verified at $workspaceDir" -ForegroundColor Green
 # 5. Build Spring Boot Executable JAR if needed
 Write-Host "`n[5/6] Verifying Spring Boot Application Package..." -ForegroundColor Yellow
 $engineDir = Join-Path $RepoRoot "mft-integration-engine"
-$jarPath = Join-Path $engineDir "target\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+$jarPath = Join-Path $RepoRoot "bin\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+if (-not (Test-Path $jarPath)) {
+    $jarPath = Join-Path $engineDir "target\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+}
 
 if (-not (Test-Path $jarPath)) {
     Write-Host "  Packaging Spring Boot Application..." -ForegroundColor Cyan
@@ -187,7 +190,7 @@ if (-not (Test-Path $jarPath)) {
         Pop-Location
     }
 }
-Write-Host "  OK: Executable JAR ready." -ForegroundColor Green
+Write-Host "  OK: Executable JAR ready at $jarPath" -ForegroundColor Green
 
 # 6. Launch Services & Open Web Dashboards
 Write-Host "`n[6/6] Starting Services & Launching Control Panels..." -ForegroundColor Yellow

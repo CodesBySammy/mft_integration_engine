@@ -1,0 +1,46 @@
+name: Release Standalone Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Build Spring Boot Application
+        working-directory: mft-integration-engine
+        run: .\mvnw.cmd package -DskipTests
+
+      - name: Assemble Standalone Portable Distribution
+        run: |
+          New-Item -ItemType Directory -Path "dist\bin", "dist\workspace\downloads", "dist\workspace\staging", "dist\workspace\quarantine", "dist\workspace\status" -Force | Out-Null
+          Copy-Item -Path "mft-integration-engine\target\mft-integration-engine-0.0.1-SNAPSHOT.jar" -Destination "dist\bin\" -Force
+          Copy-Item -Path "setup.bat", "start-all.bat", "stop-all.bat", "README.md", ".gitignore" -Destination "dist\" -Force
+          Copy-Item -Path "scripts" -Destination "dist\" -Recurse -Force
+          Copy-Item -Path "sftpgo-bundle" -Destination "dist\" -Recurse -Force
+          Compress-Archive -Path "dist\*" -DestinationPath "mft-enterprise-engine-windows-x64.zip" -Force
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mft-enterprise-engine-windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

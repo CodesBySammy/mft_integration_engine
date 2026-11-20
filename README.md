@@ -51,34 +51,46 @@ An enterprise-grade, configuration-driven **Managed File Transfer (MFT)** engine
 
 ---
 
-## 1-Click Quickstart (Windows)
+## Quickstart (3 Easy Methods)
 
 ### Prerequisites
 - **Windows OS**
 - **Java 21 (JDK 21)** installed and available in PATH ([Download from Eclipse Adoptium](https://adoptium.net))
 
-### Step 1: Clone Repository
+---
+
+### Option 1: 1-Line Remote Installer (No Git Required)
+Open PowerShell and run:
+```powershell
+irm https://raw.githubusercontent.com/CodesBySammy/mft_integration_engine/main/scripts/quick-install.ps1 | iex
+```
+*This downloads the engine, provisions the SFTP servers, configures users, and opens all dashboards automatically.*
+
+---
+
+### Option 2: Download Standalone ZIP (No Git Required)
+1. Download the pre-built package:
+   **[Download Latest Windows Standalone ZIP](https://github.com/CodesBySammy/mft_integration_engine/releases)**
+2. Extract the ZIP file anywhere on your computer.
+3. Double-click **`setup.bat`** (or `start-all.bat`).
+4. That's it! Everything launches and opens in your browser immediately.
+
+---
+
+### Option 3: Git Clone (For Developers)
 ```powershell
 git clone https://github.com/CodesBySammy/mft_integration_engine.git
 cd mft_integration_engine
-```
-
-### Step 2: Run Setup
-Double-click **`setup.bat`** (or run in PowerShell):
-```powershell
 .\setup.bat
 ```
 
 **What `setup.bat` automatically does:**
-1. Checks for Java 21 environment.
-2. Automatically downloads the portable SFTPGo Windows binary if not already present.
+1. Checks for Java 21 runtime.
+2. Automatically downloads portable SFTPGo for Windows if not present.
 3. Provisions Server A (Port 2022) and Server B (Port 2222).
-4. Configures folders:
-   - Source: `sftpgo\instance-a\data\mft_source\upload`
-   - Destination: `sftpgo\instance-b\data\mft_destination\incoming`
+4. Sets up Source (`mft_source/upload`) and Destination (`mft_destination/incoming`) directories.
 5. Pre-seeds SFTP users (`mft_source` and `mft_destination`).
-6. Builds the Spring Boot engine JAR and initializes the workspace.
-7. Launches all 3 services and automatically opens all dashboards in your browser!
+6. Starts all 3 processes and automatically opens all dashboards in your browser!
 
 ---
 

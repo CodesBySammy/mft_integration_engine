@@ -2,6 +2,11 @@
 # MFT Enterprise Integration Engine - .gitignore
 # ==============================================================================
 
+# Build & Distribution Packages
+dist/
+dist-temp/
+*.zip
+
 # Maven Build Artifacts
 **/target/
 pom.xml.tag

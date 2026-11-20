@@ -23,7 +23,10 @@ if (-not (Test-Path $sftpgoExe)) {
 $instAConfig = Join-Path $sftpgoDir "instance-a\config"
 $instBConfig = Join-Path $sftpgoDir "instance-b\config"
 $engineDir = Join-Path $RepoRoot "mft-integration-engine"
-$jarPath = Join-Path $engineDir "target\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+$jarPath = Join-Path $RepoRoot "bin\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+if (-not (Test-Path $jarPath)) {
+    $jarPath = Join-Path $engineDir "target\mft-integration-engine-0.0.1-SNAPSHOT.jar"
+}
 
 Write-Host "Starting SFTPGo Server A (Port 2022)..." -ForegroundColor Cyan
 Start-Process -FilePath $sftpgoExe -ArgumentList "serve --config-dir `"$instAConfig`" --loaddata-from `"$instAConfig\users_seed.json`" --loaddata-mode 0" -WorkingDirectory $sftpgoDir -WindowStyle Minimized
