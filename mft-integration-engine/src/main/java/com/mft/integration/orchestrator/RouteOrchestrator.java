@@ -95,7 +95,8 @@ public class RouteOrchestrator {
 
         log.info("Starting execution: route=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
                 routeId, runId, route.getProcessingMode(), route.isAllowReprocessing());
-        auditService.recordEvent(runId, routeId, "ROUTE_START", null, null, "STARTED", null,
+        auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                "ROUTE_START", null, null, "STARTED", null,
                 "Route execution initiated for " + route.getProcessingMode());
 
         String effectivePattern = (patternOverride != null && !patternOverride.isBlank())
@@ -118,7 +119,8 @@ public class RouteOrchestrator {
             );
         } catch (Exception e) {
             log.error("File discovery failed for route [{}] on [{}]: {}", routeId, route.getSourceConnectionId(), e.getMessage());
-            auditService.recordEvent(runId, routeId, "DISCOVERY_FAILED", null, null, "FAILED", "DISCOVERY_ERROR", e.getMessage());
+            auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                    "DISCOVERY_FAILED", null, null, "FAILED", "DISCOVERY_ERROR", e.getMessage());
             return new RouteExecutionResult(runId, routeId, false, 0, 0, 0, 0, startTime, Instant.now(),
                     "Discovery failed: " + e.getMessage(), List.of());
         }
@@ -166,8 +168,8 @@ public class RouteOrchestrator {
                 transferRun.setErrorCode("TRANSFER_FAILED");
                 transferRun.setErrorMessage(e.getMessage());
                 statusService.registerRun(transferRun);
-                auditService.recordEvent(itemRunId, routeId, "FILE_TRANSFER_FAILED",
-                        remoteFile.getFilename(), null, "FAILED", "TRANSFER_FAILED", e.getMessage());
+                auditService.recordEvent(itemRunId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                        "FILE_TRANSFER_FAILED", remoteFile.getFilename(), null, "FAILED", "TRANSFER_FAILED", e.getMessage());
                 completedRuns.add(transferRun);
             }
         }
@@ -178,7 +180,8 @@ public class RouteOrchestrator {
                 routeId, discoveredFiles.size(), successCount, skippedCount, failureCount);
 
         log.info(summary);
-        auditService.recordEvent(runId, routeId, "ROUTE_COMPLETED", null, null,
+        auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                "ROUTE_COMPLETED", null, null,
                 overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", null, summary);
 
         return new RouteExecutionResult(runId, routeId, overallSuccess, discoveredFiles.size(),
@@ -261,7 +264,9 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), "TRANSFER_COMPLETED",
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(),
+                        route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                        "TRANSFER_COMPLETED",
                         remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
                         "Transferred " + pubResult.getBytesTransferred() + " bytes. Checksum: " + checksum);
 
@@ -326,7 +331,9 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), "TRANSFORMATION_COMPLETED",
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(),
+                        route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                        "TRANSFORMATION_COMPLETED",
                         remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
                         String.format("Transformed %d records (Total: %s). Checksum: %s",
                                 result.recordCount(), result.totalAmount(), result.outputChecksum()));

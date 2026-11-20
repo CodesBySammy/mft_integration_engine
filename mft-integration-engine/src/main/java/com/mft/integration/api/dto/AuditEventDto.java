@@ -12,6 +12,9 @@ public class AuditEventDto {
     private final Instant timestamp;
     private final String runId;
     private final String routeId;
+    private final String connectionId;
+    private final String sourceConnectionId;
+    private final String destinationConnectionId;
     private final String operation;
     private final String sourceFile;
     private final String destinationFile;
@@ -23,6 +26,9 @@ public class AuditEventDto {
         this.timestamp = event.getTimestamp();
         this.runId = event.getRunId();
         this.routeId = event.getRouteId();
+        this.connectionId = event.getConnectionId();
+        this.sourceConnectionId = event.getSourceConnectionId();
+        this.destinationConnectionId = event.getDestinationConnectionId();
         this.operation = event.getOperation();
         this.sourceFile = event.getSourceFile();
         this.destinationFile = event.getDestinationFile();
@@ -41,6 +47,18 @@ public class AuditEventDto {
 
     public String getRouteId() {
         return routeId;
+    }
+
+    public String getConnectionId() {
+        return connectionId;
+    }
+
+    public String getSourceConnectionId() {
+        return sourceConnectionId;
+    }
+
+    public String getDestinationConnectionId() {
+        return destinationConnectionId;
     }
 
     public String getOperation() {

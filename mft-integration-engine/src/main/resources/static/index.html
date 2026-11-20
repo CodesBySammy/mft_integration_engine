@@ -259,6 +259,30 @@
       font-family: var(--font-mono);
     }
 
+    .badge-conn {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.25);
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+    }
+
+    .badge-op {
+      background: rgba(168, 85, 247, 0.12);
+      color: #c084fc;
+      border: 1px solid rgba(192, 132, 252, 0.25);
+      font-size: 0.73rem;
+      font-weight: 600;
+    }
+
+    .badge-run {
+      background: rgba(148, 163, 184, 0.1);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+    }
+
     .hash-code {
       font-family: var(--font-mono);
       font-size: 0.78rem;
@@ -269,17 +293,26 @@
       background: #0b0f19;
       border: 1px solid var(--border);
       border-radius: 0.4rem;
-      padding: 0.75rem 1rem;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      max-height: 200px;
+      padding: 0.5rem 0.75rem;
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      max-height: 280px;
       overflow-y: auto;
       color: #cbd5e1;
     }
 
     .log-line {
-      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       line-height: 1.4;
+      flex-wrap: wrap;
+    }
+
+    .log-line:last-child {
+      border-bottom: none;
     }
 
     .alert {
@@ -548,20 +581,66 @@
         const data = json.data || [];
 
         if (data.length === 0) {
-          box.innerHTML = '<span style="color: var(--text-muted);">No audit entries yet.</span>';
+          box.innerHTML = '<span style="color: var(--text-muted); padding: 0.5rem; display: block;">No audit entries yet.</span>';
           return;
         }
 
-        box.innerHTML = data.slice(-25).reverse().map(e => {
+        const friendlyOps = {
+          'ROUTE_START': 'Route Started',
+          'ROUTE_COMPLETED': 'Route Completed',
+          'DISCOVERY_FAILED': 'Discovery Error',
+          'FILE_TRANSFER_FAILED': 'Transfer Failed',
+          'TRANSFER_COMPLETED': 'Transfer Success',
+          'TRANSFORMATION_COMPLETED': 'Transform Success',
+          'DOWNLOAD': 'File Downloaded',
+          'UPLOAD': 'File Uploaded',
+          'PUBLISH': 'File Published',
+          'SKIPPED_DUPLICATE': 'Duplicate Skipped'
+        };
+
+        function formatOp(op) {
+          if (!op) return 'Activity';
+          if (friendlyOps[op]) return friendlyOps[op];
+          return op.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        box.innerHTML = data.slice(-30).reverse().map(e => {
           const time = formatTime(e.timestamp);
-          const detail = e.details || (e.sourceFile ? (e.sourceFile + ' &rarr; ' + (e.destinationFile || '')) : e.status);
-          const statusCol = e.status === 'COMPLETED' ? '#34d399' : (e.status === 'FAILED' ? '#f87171' : '#60a5fa');
+          const isDone = e.status === 'COMPLETED' || e.status === 'STARTED';
+          const isFailed = e.status === 'FAILED';
+          const badgeClass = isDone ? 'badge-completed' : (isFailed ? 'badge-failed' : 'badge-route');
+
+          // Proper Connection ID: use backend value or fallback cleanly
+          const conn = e.connectionId || (e.sourceConnectionId && e.destinationConnectionId 
+            ? (e.sourceConnectionId + ' &rarr; ' + e.destinationConnectionId) 
+            : 'C_FILE_IN &rarr; C_FILE_OUT');
+
+          // Clean Human-Readable Operation Label (instead of raw variable names)
+          const opLabel = formatOp(e.operation);
+
+          // Proper Route ID
+          const route = e.routeId || '-';
+
+          // Proper Run / Transfer ID
+          const shortRunId = e.runId ? (e.runId.length > 20 ? e.runId.split('_').slice(-2).join('_') : e.runId) : '-';
+
+          // Structured Details / Path movement
+          let detail = e.details || '';
+          if (e.sourceFile && e.destinationFile) {
+            detail = `<code style="color: #93c5fd;">${e.sourceFile}</code> &rarr; <code style="color: #86efac;">${e.destinationFile}</code>` + (detail ? ` &bull; ${detail}` : '');
+          } else if (e.sourceFile) {
+            detail = `<code style="color: #93c5fd;">${e.sourceFile}</code>` + (detail ? ` &bull; ${detail}` : '');
+          }
+
           return `
             <div class="log-line">
-              <span style="color: #64748b;">[${time}]</span>
-              <span style="color: #a78bfa; font-weight: 600;">[${e.operation}]</span>
-              <span style="color: ${statusCol}; font-weight: 600;">[${e.status}]</span>
-              <span>${detail}</span>
+              <span style="color: #64748b; font-size: 0.75rem; font-family: var(--font-mono); white-space: nowrap;">[${time}]</span>
+              <span class="badge badge-route" title="Route ID: ${route}">${route}</span>
+              <span class="badge badge-conn" title="Connection ID">${conn}</span>
+              <span class="badge badge-op">${opLabel}</span>
+              <span class="badge ${badgeClass}" style="font-size: 0.72rem;">${e.status}</span>
+              <span class="badge badge-run" title="Full Run ID: ${e.runId || ''}">ID: ${shortRunId}</span>
+              <span style="color: #cbd5e1; margin-left: 0.25rem;">${detail}</span>
             </div>
           `;
         }).join('');

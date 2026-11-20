@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,10 +36,16 @@ class IdempotencyAndRetryLiveIntegrationTest {
     @DisplayName("Live End-to-End: Idempotency detection skips duplicate files and honors allowReprocessing")
     void testLiveIdempotencyLifecycle() throws IOException {
         String testFilename = "idempotency_test_" + System.currentTimeMillis() + ".txt";
-        Path sourceServerDir = Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload");
-        Files.createDirectories(sourceServerDir);
-        Path sourceServerFile = sourceServerDir.resolve(testFilename);
-        Files.writeString(sourceServerFile, "IDEMPOTENT_TRANSACTION_PAYLOAD_1001\n");
+        List<Path> candidateDirs = List.of(
+                Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
+                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload")
+        );
+        for (Path dir : candidateDirs) {
+            try {
+                Files.createDirectories(dir);
+                Files.writeString(dir.resolve(testFilename), "IDEMPOTENT_TRANSACTION_PAYLOAD_1001\n");
+            } catch (Exception ignored) {}
+        }
 
         try {
             // Verify file is visible via ReadAdapter on Server A (port 2022)
@@ -84,7 +91,11 @@ class IdempotencyAndRetryLiveIntegrationTest {
                 route.setAllowReprocessing(true);
             }
         } finally {
-            Files.deleteIfExists(sourceServerFile);
+            for (Path dir : candidateDirs) {
+                try {
+                    Files.deleteIfExists(dir.resolve(testFilename));
+                } catch (Exception ignored) {}
+            }
         }
     }
 }

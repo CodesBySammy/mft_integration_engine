@@ -45,8 +45,7 @@ class SftpLiveIntegrationTest {
         // Discover *.txt files
         List<RemoteFileInfo> txtFiles = readAdapter.discoverFiles("C_FILE_IN", "/upload", "*.txt");
         assertThat(txtFiles).isNotEmpty();
-        assertThat(txtFiles.get(0).getFilename()).isEqualTo("positions.txt");
-        assertThat(txtFiles.get(0).getSize()).isGreaterThan(0);
+        assertThat(txtFiles).anyMatch(f -> f.getFilename().equals("positions.txt") && f.getSize() > 0);
     }
 
     @Test
