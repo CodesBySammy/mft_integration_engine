@@ -49,6 +49,8 @@ An enterprise-grade, configuration-driven **Managed File Transfer (MFT)** engine
    +-------------------+       +--------------------+      +-------------------+
 ```
 
+> 📖 **Deep Dive**: See the comprehensive [Architecture & End-to-End File Flow Specification](docs/ARCHITECTURE_AND_FILE_FLOW.md) for full Mermaid sequence diagrams, state transition models, and security boundary guarantees.
+
 ---
 
 ## Quickstart (3 Easy Methods)
