@@ -386,10 +386,10 @@
       </div>
       <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
         <button class="btn" id="btn-copy" onclick="triggerRoute('R_RAW_COPY')">
-          &#9654; Run Raw Copy Route (*.txt)
+          &#9654; Sync: localhost:2022/upload &rarr; localhost:2222/incoming (*.txt)
         </button>
         <button class="btn btn-secondary" id="btn-tx" onclick="triggerRoute('R_TRANSFORM')">
-          &#9654; Run Transform Route (*.dat)
+          &#9654; Transform: localhost:2022/upload &rarr; localhost:2222/incoming (*.dat)
         </button>
       </div>
     </div>
@@ -408,7 +408,7 @@
           <thead>
             <tr>
               <th>Source File</th>
-              <th>Route</th>
+              <th>Endpoint Address & ID</th>
               <th>Transfer Status</th>
               <th>Size</th>
               <th>SHA-256 Checksum</th>
@@ -555,11 +555,16 @@
           const shortHash = checksum.length > 20 ? checksum.substring(0, 16) + '...' : checksum;
           const timeStr = formatTime(t.endTime || t.startTime);
           const sizeStr = formatBytes(t.bytesTransferred);
+          const exactAddr = 'localhost:2022/upload &rarr; localhost:2222/incoming';
+          const runId = t.runId || '-';
 
           return `
             <tr>
               <td><strong style="color: #fff;">${t.sourceFilename || '-'}</strong></td>
-              <td><span class="badge badge-route">${t.routeId || '-'}</span></td>
+              <td>
+                <span class="badge badge-conn" style="font-size: 0.73rem; display: inline-block; margin-bottom: 0.25rem;">${exactAddr}</span>
+                <span class="badge badge-run" style="font-size: 0.7rem; display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Transfer Run ID: ${runId}">ID: ${runId}</span>
+              </td>
               <td><span class="badge ${badgeClass}">${t.status || 'UNKNOWN'}</span></td>
               <td>${sizeStr}</td>
               <td><span class="hash-code" title="${checksum}">${shortHash}</span></td>
@@ -586,12 +591,12 @@
         }
 
         const friendlyOps = {
-          'ROUTE_START': 'Route Started',
-          'ROUTE_COMPLETED': 'Route Completed',
+          'ROUTE_START': 'Sync Initiated',
+          'ROUTE_COMPLETED': 'Sync Completed',
           'DISCOVERY_FAILED': 'Discovery Error',
           'FILE_TRANSFER_FAILED': 'Transfer Failed',
-          'TRANSFER_COMPLETED': 'Transfer Success',
-          'TRANSFORMATION_COMPLETED': 'Transform Success',
+          'TRANSFER_COMPLETED': 'File Transferred',
+          'TRANSFORMATION_COMPLETED': 'Transformed & Sent',
           'DOWNLOAD': 'File Downloaded',
           'UPLOAD': 'File Uploaded',
           'PUBLISH': 'File Published',
@@ -599,9 +604,34 @@
         };
 
         function formatOp(op) {
-          if (!op) return 'Activity';
+          if (!op) return 'Sync';
           if (friendlyOps[op]) return friendlyOps[op];
           return op.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function resolveExactAddress(e) {
+          if (e.connectionId && (e.connectionId.includes(':') || e.connectionId.includes('/'))) {
+            return e.connectionId.replace('->', '&rarr;');
+          }
+          if (e.sourceFile && e.destinationFile) {
+            return `localhost:2022${e.sourceFile} &rarr; localhost:2222${e.destinationFile}`;
+          }
+          return 'localhost:2022/upload &rarr; localhost:2222/incoming';
+        }
+
+        function cleanDetailText(text, exactAddr, runId) {
+          if (!text) return '';
+          return text
+            .replace(/Completed route \[R_RAW_COPY\]/gi, `Completed sync [${exactAddr}]`)
+            .replace(/Completed route \[R_TRANSFORM\]/gi, `Completed sync [${exactAddr}]`)
+            .replace(/Completed route \[[^\]]+\]/gi, `Completed sync [${exactAddr}]`)
+            .replace(/Route execution initiated for RAW_COPY/gi, `Sync initiated: ${exactAddr}`)
+            .replace(/Route execution initiated for TRANSFORM/gi, `Transform sync initiated: ${exactAddr}`)
+            .replace(/Route execution initiated for [A-Z_]+/gi, `Sync initiated: ${exactAddr}`)
+            .replace(/R_RAW_COPY/g, exactAddr)
+            .replace(/R_TRANSFORM/g, exactAddr)
+            .replace(/RAW_COPY/g, 'Pass-Through')
+            .replace(/TRANSFORM/g, 'Transformation');
         }
 
         box.innerHTML = data.slice(-30).reverse().map(e => {
@@ -610,22 +640,17 @@
           const isFailed = e.status === 'FAILED';
           const badgeClass = isDone ? 'badge-completed' : (isFailed ? 'badge-failed' : 'badge-route');
 
-          // Proper Connection ID: use backend value or fallback cleanly
-          const conn = e.connectionId || (e.sourceConnectionId && e.destinationConnectionId 
-            ? (e.sourceConnectionId + ' &rarr; ' + e.destinationConnectionId) 
-            : 'C_FILE_IN &rarr; C_FILE_OUT');
+          // Exact Address (source -> destination address)
+          const exactAddr = resolveExactAddress(e);
 
-          // Clean Human-Readable Operation Label (instead of raw variable names)
+          // Clean Human-Readable Action Label (no variable names)
           const opLabel = formatOp(e.operation);
 
-          // Proper Route ID
-          const route = e.routeId || '-';
+          // Exact Run / Transfer ID
+          const exactId = e.runId || ('ID-' + time.replace(/[: ]/g, ''));
 
-          // Proper Run / Transfer ID
-          const shortRunId = e.runId ? (e.runId.length > 20 ? e.runId.split('_').slice(-2).join('_') : e.runId) : '-';
-
-          // Structured Details / Path movement
-          let detail = e.details || '';
+          // Sanitized Details without internal route codes
+          let detail = cleanDetailText(e.details || '', exactAddr, exactId);
           if (e.sourceFile && e.destinationFile) {
             detail = `<code style="color: #93c5fd;">${e.sourceFile}</code> &rarr; <code style="color: #86efac;">${e.destinationFile}</code>` + (detail ? ` &bull; ${detail}` : '');
           } else if (e.sourceFile) {
@@ -635,11 +660,10 @@
           return `
             <div class="log-line">
               <span style="color: #64748b; font-size: 0.75rem; font-family: var(--font-mono); white-space: nowrap;">[${time}]</span>
-              <span class="badge badge-route" title="Route ID: ${route}">${route}</span>
-              <span class="badge badge-conn" title="Connection ID">${conn}</span>
+              <span class="badge badge-conn" title="Exact Address: Source &rarr; Destination">${exactAddr}</span>
               <span class="badge badge-op">${opLabel}</span>
               <span class="badge ${badgeClass}" style="font-size: 0.72rem;">${e.status}</span>
-              <span class="badge badge-run" title="Full Run ID: ${e.runId || ''}">ID: ${shortRunId}</span>
+              <span class="badge badge-run" title="Exact Run ID">${exactId}</span>
               <span style="color: #cbd5e1; margin-left: 0.25rem;">${detail}</span>
             </div>
           `;

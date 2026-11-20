@@ -22,6 +22,18 @@ public class AuditService {
         this.auditRepository = auditRepository;
     }
 
+    public void recordEvent(String runId, String routeId, String connectionId,
+                            String operation, String sourceFile, String destinationFile, String status,
+                            String errorCode, String details) {
+        AuditEvent event = new AuditEvent(java.time.Instant.now(), runId, routeId, connectionId, null, null,
+                operation, sourceFile, destinationFile, status, errorCode, details);
+        auditRepository.save(event);
+
+        log.info("AUDIT: runId=[{}] routeId=[{}] conn=[{}] op=[{}] src=[{}] dst=[{}] status=[{}] err=[{}]",
+                runId, routeId, connectionId, operation, sourceFile, destinationFile,
+                status, errorCode != null ? errorCode : "NONE");
+    }
+
     public void recordEvent(String runId, String routeId, String sourceConnectionId, String destinationConnectionId,
                             String operation, String sourceFile, String destinationFile, String status,
                             String errorCode, String details) {

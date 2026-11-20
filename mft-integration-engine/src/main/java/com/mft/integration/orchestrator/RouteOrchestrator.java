@@ -52,6 +52,9 @@ public class RouteOrchestrator {
     private final TransferStatusService statusService;
     private final AuditService auditService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.mft.integration.connection.ConnectionResolver connectionResolver;
+
     public RouteOrchestrator(RouteRegistry routeRegistry,
                              ReadAdapter readAdapter,
                              WriteAdapter writeAdapter,
@@ -93,11 +96,13 @@ public class RouteOrchestrator {
                 0.1
         );
 
-        log.info("Starting execution: route=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
-                routeId, runId, route.getProcessingMode(), route.isAllowReprocessing());
-        auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+        String address = resolveAddress(route);
+
+        log.info("Starting execution: address=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
+                address, runId, route.getProcessingMode(), route.isAllowReprocessing());
+        auditService.recordEvent(runId, routeId, address,
                 "ROUTE_START", null, null, "STARTED", null,
-                "Route execution initiated for " + route.getProcessingMode());
+                "Sync initiated: " + address + " [ID: " + runId + "]");
 
         String effectivePattern = (patternOverride != null && !patternOverride.isBlank())
                 ? patternOverride
@@ -176,11 +181,11 @@ public class RouteOrchestrator {
 
         Instant endTime = Instant.now();
         boolean overallSuccess = failureCount == 0;
-        String summary = String.format("Completed route [%s]. Discovered: %d, Transferred: %d, Skipped: %d, Failed: %d",
-                routeId, discoveredFiles.size(), successCount, skippedCount, failureCount);
+        String summary = String.format("Completed sync [%s]. Discovered: %d, Transferred: %d, Skipped: %d, Failed: %d [ID: %s]",
+                address, discoveredFiles.size(), successCount, skippedCount, failureCount, runId);
 
         log.info(summary);
-        auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
+        auditService.recordEvent(runId, routeId, address,
                 "ROUTE_COMPLETED", null, null,
                 overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", null, summary);
 
@@ -264,11 +269,11 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(),
-                        route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                String address = resolveAddress(route);
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), address,
                         "TRANSFER_COMPLETED",
                         remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
-                        "Transferred " + pubResult.getBytesTransferred() + " bytes. Checksum: " + checksum);
+                        "Transferred " + pubResult.getBytesTransferred() + " bytes to " + pubResult.getFullRemotePath() + " [SHA-256: " + checksum + "]");
 
             } else if (route.getProcessingMode() == ProcessingMode.TRANSFORM) {
                 TransformationProcessor.TransformationResult result = transformationProcessor.transform(
@@ -331,12 +336,12 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(),
-                        route.getSourceConnectionId(), route.getDestinationConnectionId(),
+                String address = resolveAddress(route);
+                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), address,
                         "TRANSFORMATION_COMPLETED",
                         remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
-                        String.format("Transformed %d records (Total: %s). Checksum: %s",
-                                result.recordCount(), result.totalAmount(), result.outputChecksum()));
+                        String.format("Transformed %d records to %s [SHA-256: %s]",
+                                result.recordCount(), pubResult.getFullRemotePath(), result.outputChecksum()));
             } else {
                 throw new MftException("UNSUPPORTED_MODE", "Processing mode not supported: " + route.getProcessingMode());
             }
@@ -346,6 +351,25 @@ public class RouteOrchestrator {
             idempotencyService.markFailed(idempotencyKey, e.getMessage());
             throw e;
         }
+    }
+
+    private String resolveAddress(RouteDefinition route) {
+        if (route == null) return "localhost:2022/upload -> localhost:2222/incoming";
+        String srcAddr = "localhost:2022";
+        String dstAddr = "localhost:2222";
+        if (connectionResolver != null) {
+            try {
+                com.mft.integration.connection.ConnectionDefinition src = connectionResolver.getConnection(route.getSourceConnectionId());
+                if (src != null) srcAddr = src.getHost() + ":" + src.getPort();
+            } catch (Exception ignored) {}
+            try {
+                com.mft.integration.connection.ConnectionDefinition dst = connectionResolver.getConnection(route.getDestinationConnectionId());
+                if (dst != null) dstAddr = dst.getHost() + ":" + dst.getPort();
+            } catch (Exception ignored) {}
+        }
+        String srcDir = route.getSourceDirectory() != null ? route.getSourceDirectory() : "/upload";
+        String dstDir = route.getDestinationDirectory() != null ? route.getDestinationDirectory() : "/incoming";
+        return srcAddr + srcDir + " -> " + dstAddr + dstDir;
     }
 
     private String generateRunId(String routeId) {

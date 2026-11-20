@@ -22,7 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Manages and caches SFTP SessionFactory instances keyed by connectionId.
  * Uses Apache MINA SSHD through Spring Integration SFTP.
- * Automatically wraps session factories in CachingSessionFactory to reuse pooled SSH sessions.
+ * Automatically wraps session factories in CachingSessionFactory to reuse
+ * pooled SSH sessions.
  */
 @Component
 public class SftpSessionFactoryRegistry {
@@ -34,7 +35,7 @@ public class SftpSessionFactoryRegistry {
     private final Map<String, SessionFactory<SftpClient.DirEntry>> factoryCache = new ConcurrentHashMap<>();
 
     public SftpSessionFactoryRegistry(ConnectionResolver connectionResolver,
-                                     CredentialProvider credentialProvider) {
+            CredentialProvider credentialProvider) {
         this.connectionResolver = connectionResolver;
         this.credentialProvider = credentialProvider;
     }
@@ -51,7 +52,8 @@ public class SftpSessionFactoryRegistry {
      */
     public SessionFactory<SftpClient.DirEntry> createSessionFactory(String connectionId) {
         ConnectionDefinition def = connectionResolver.getConnection(connectionId);
-        log.info("Creating SFTP SessionFactory for connection [{}] ({}:{})", connectionId, def.getHost(), def.getPort());
+        log.info("Creating SFTP SessionFactory for connection [{}] ({}:{})", connectionId, def.getHost(),
+                def.getPort());
 
         DefaultSftpSessionFactory rawFactory = new DefaultSftpSessionFactory(true);
         rawFactory.setHost(def.getHost());
@@ -73,7 +75,9 @@ public class SftpSessionFactoryRegistry {
 
         // Host key verification configuration
         if (def.getHostKeyVerificationMode() == HostKeyVerificationMode.ACCEPT_ALL_DEV_ONLY) {
-            log.warn("SFTP Connection [{}] is configured with ACCEPT_ALL_DEV_ONLY host-key verification. Not safe for production.", connectionId);
+            log.warn(
+                    "SFTP Connection [{}] is configured with ACCEPT_ALL_DEV_ONLY host-key verification. Not safe for production.",
+                    connectionId);
             rawFactory.setAllowUnknownKeys(true);
         } else {
             rawFactory.setAllowUnknownKeys(false);
@@ -82,12 +86,14 @@ public class SftpSessionFactoryRegistry {
                 if (knownHosts.exists()) {
                     rawFactory.setKnownHostsResource(new FileSystemResource(knownHosts));
                 } else {
-                    throw new SftpConnectionException(connectionId, "Configured known_hosts file not found: " + def.getKnownHostsFile());
+                    throw new SftpConnectionException(connectionId,
+                            "Configured known_hosts file not found: " + def.getKnownHostsFile());
                 }
             }
         }
 
-        // Wrap in CachingSessionFactory with a pool size of 5 sessions per connection endpoint
+        // Wrap in CachingSessionFactory with a pool size of 5 sessions per connection
+        // endpoint
         CachingSessionFactory<SftpClient.DirEntry> cachingFactory = new CachingSessionFactory<>(rawFactory, 5);
         cachingFactory.setSessionWaitTimeout(def.getSessionTimeoutMs());
 
