@@ -1,7 +1,7 @@
 @echo off
 title MFT Enterprise Engine - 1-Click Setup
 echo ==============================================================================
-echo Launching MFT Enterprise Engine Automated Setup & Bootstrap...
+echo Launching MFT Enterprise Engine Automated Setup and Bootstrap...
 echo ==============================================================================
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup.ps1"
 if %ERRORLEVEL% NEQ 0 (

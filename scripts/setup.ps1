@@ -12,24 +12,79 @@ Write-Host "   MFT Enterprise Integration Engine - Automated Setup          " -F
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "Project Root : $RepoRoot" -ForegroundColor DarkGray
 
-# 1. Java 21 Check
-Write-Host "`n[1/6] Checking Java Environment..." -ForegroundColor Yellow
-try {
-    $javaVer = java -version 2>&1 | Out-String
-    if ($javaVer -match 'version "(\d+)') {
-        $major = [int]$matches[1]
-        if ($major -lt 21) {
-            Write-Host "WARNING: Found Java version $major. Java 21+ is recommended." -ForegroundColor Yellow
-        } else {
-            Write-Host "  OK: Java $major detected." -ForegroundColor Green
-        }
-    } else {
-        Write-Host "  OK: Java runtime available." -ForegroundColor Green
-    }
-} catch {
-    Write-Host "ERROR: Java not found in PATH! Please install Java 21 (JDK 21) from https://adoptium.net" -ForegroundColor Red
-    exit 1
+# 1. Java 21 Detection & Verification
+Write-Host "`n[1/6] Detecting Java 21+ Environment..." -ForegroundColor Yellow
+
+$javaExe = $null
+
+# Search PATH
+$cmd = Get-Command "java" -ErrorAction SilentlyContinue
+if ($cmd) {
+    $javaExe = $cmd.Source
 }
+
+# Search JAVA_HOME
+if (-not $javaExe -and $env:JAVA_HOME) {
+    $candidate = Join-Path $env:JAVA_HOME "bin\java.exe"
+    if (Test-Path $candidate) { $javaExe = $candidate }
+}
+
+# Search standard Windows installation locations
+if (-not $javaExe) {
+    $candidates = @(
+        (Get-ChildItem "C:\Program Files\Eclipse Adoptium" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1),
+        (Get-ChildItem "C:\Program Files\Java" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1),
+        (Get-ChildItem "C:\Program Files\Amazon Corretto" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1),
+        (Get-ChildItem "C:\Program Files\Microsoft" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1),
+        (Get-ChildItem (Join-Path $RepoRoot "jdk") -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path $c.FullName)) {
+            $javaExe = $c.FullName
+            break
+        }
+    }
+}
+
+# If still not found, download portable OpenJDK 21 automatically
+if (-not $javaExe) {
+    Write-Host "  Java not detected on system. Automatically downloading portable OpenJDK 21..." -ForegroundColor Cyan
+    $jdkDir = Join-Path $RepoRoot "jdk"
+    New-Item -ItemType Directory -Path $jdkDir -Force | Out-Null
+    $jdkZip = Join-Path $env:TEMP "openjdk21.zip"
+    $jdkUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.6%2B7/OpenJDK21U-jdk_x64_windows_hotspot_21.0.6_7.zip"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $jdkUrl -OutFile $jdkZip -UseBasicParsing
+        Expand-Archive -Path $jdkZip -DestinationPath $jdkDir -Force
+        Remove-Item $jdkZip -Force -ErrorAction SilentlyContinue
+        $javaExe = (Get-ChildItem $jdkDir -Filter "java.exe" -Recurse | Select-Object -First 1).FullName
+        Write-Host "  Successfully installed portable OpenJDK 21." -ForegroundColor Green
+    } catch {
+        Write-Host "ERROR: Could not download Java automatically ($($_.Exception.Message))." -ForegroundColor Red
+        Write-Host "Please download & install Java 21 from: https://adoptium.net" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+# Add Java bin to current PATH session
+$javaBin = Split-Path $javaExe -Parent
+if ($env:PATH -notlike "*$javaBin*") {
+    $env:PATH = "$javaBin;$env:PATH"
+}
+$env:JAVA_HOME = Split-Path $javaBin -Parent
+
+# Read version safely without native stderr tripping ErrorActionPreference Stop
+$verFile = Join-Path $env:TEMP "java_ver_check.txt"
+$proc = Start-Process -FilePath $javaExe -ArgumentList "-version" -NoNewWindow -Wait -PassThru -RedirectStandardError $verFile
+$verOutput = if (Test-Path $verFile) { Get-Content $verFile -Raw } else { "" }
+Remove-Item $verFile -Force -ErrorAction SilentlyContinue
+
+$major = 21
+if ($verOutput -match 'version "(\d+)') {
+    $major = [int]$matches[1]
+}
+Write-Host "  OK: Java $major detected ($javaExe)" -ForegroundColor Green
 
 # 2. SFTPGo Binary Discovery or Automated Download
 Write-Host "`n[2/6] Verifying SFTPGo Server Engine..." -ForegroundColor Yellow
@@ -208,7 +263,7 @@ Start-Process -FilePath $sftpgoExe -ArgumentList $argB -WorkingDirectory $sftpgo
 
 # Launch Spring Boot Engine
 $javaArgs = "-jar `"$jarPath`" --spring.profiles.active=local"
-Start-Process -FilePath "java" -ArgumentList $javaArgs -WorkingDirectory $engineDir -WindowStyle Minimized
+Start-Process -FilePath $javaExe -ArgumentList $javaArgs -WorkingDirectory $RepoRoot -WindowStyle Minimized
 
 Write-Host "  Waiting for engine initialization..." -ForegroundColor Cyan
 $started = $false
