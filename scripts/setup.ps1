@@ -1,5 +1,5 @@
 # ==============================================================================
-# MFT Enterprise Integration Engine - Automated 1-Click Setup & Bootstrap Script
+# MFT Enterprise Integration Engine - Automated 1-Click Setup and Bootstrap Script
 # ==============================================================================
 [CmdletBinding()]
 param()
@@ -12,7 +12,7 @@ Write-Host "   MFT Enterprise Integration Engine - Automated Setup          " -F
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "Project Root : $RepoRoot" -ForegroundColor DarkGray
 
-# 1. Java 21 Detection & Verification
+# 1. Java 21 Detection and Verification
 Write-Host "`n[1/6] Detecting Java 21+ Environment..." -ForegroundColor Yellow
 
 $javaExe = $null
@@ -62,7 +62,7 @@ if (-not $javaExe) {
         Write-Host "  Successfully installed portable OpenJDK 21." -ForegroundColor Green
     } catch {
         Write-Host "ERROR: Could not download Java automatically ($($_.Exception.Message))." -ForegroundColor Red
-        Write-Host "Please download & install Java 21 from: https://adoptium.net" -ForegroundColor Yellow
+        Write-Host "Please download and install Java 21 from: https://adoptium.net" -ForegroundColor Yellow
         exit 1
     }
 }
@@ -92,7 +92,6 @@ $sftpgoDir = Join-Path $RepoRoot "sftpgo"
 $sftpgoExe = Join-Path $sftpgoDir "sftpgo.exe"
 
 if (-not (Test-Path $sftpgoExe)) {
-    # Check if existing external SFTPGo exists at D:\sftpgo
     if (Test-Path "D:\sftpgo\sftpgo.exe") {
         Write-Host "  Found SFTPGo at D:\sftpgo. Reusing local installation." -ForegroundColor Green
         $sftpgoDir = "D:\sftpgo"
@@ -119,8 +118,8 @@ if (-not (Test-Path $sftpgoExe)) {
     Write-Host "  OK: SFTPGo binary found at $sftpgoExe" -ForegroundColor Green
 }
 
-# 3. Configure Source & Destination Folders and Provision Dual SFTP Servers
-Write-Host "`n[3/6] Configuring Source & Destination Transfer Folders..." -ForegroundColor Yellow
+# 3. Configure Source and Destination Folders and Provision Dual SFTP Servers
+Write-Host "`n[3/6] Configuring Source and Destination Transfer Folders..." -ForegroundColor Yellow
 
 function Resolve-FolderStructure([string]$inputPath, [string]$defaultSubfolder) {
     $trimmed = $inputPath.TrimEnd('\').TrimEnd('/')
@@ -196,86 +195,72 @@ if (Test-Path $bundleDir) {
 }
 
 # Write instance-a config (Port 2022, WebAdmin 9080)
-$jsonConfigA = @"
-{
-  "common": { "idle_timeout": 15 },
-  "sftpd": { "bindings": [ { "port": 2022, "address": "0.0.0.0" } ] },
-  "httpd": {
-    "bindings": [ { "port": 9080, "address": "0.0.0.0", "enable_web_admin": true, "enable_web_client": true, "enable_rest_api": true } ],
-    "templates_path": "templates",
-    "static_files_path": "static",
-    "openapi_path": "openapi"
-  },
-  "smtp": { "templates_path": "templates" },
-  "data_provider": {
-    "driver": "sqlite",
-    "name": "$($instADir.Replace('\', '\\'))\\sftpgo.db"
-  }
+$configAObj = @{
+    common = @{ idle_timeout = 15 }
+    sftpd = @{ bindings = @( @{ port = 2022; address = "0.0.0.0" } ) }
+    httpd = @{
+        bindings = @( @{ port = 9080; address = "0.0.0.0"; enable_web_admin = $true; enable_web_client = $true; enable_rest_api = $true } )
+        templates_path = "templates"
+        static_files_path = "static"
+        openapi_path = "openapi"
+    }
+    smtp = @{ templates_path = "templates" }
+    data_provider = @{
+        driver = "sqlite"
+        name = (Join-Path $instADir "sftpgo.db")
+    }
 }
-"@
-Set-Content -Path (Join-Path $instAConfig "sftpgo.json") -Value $jsonConfigA -Force
+Set-Content -Path (Join-Path $instAConfig "sftpgo.json") -Value ($configAObj | ConvertTo-Json -Depth 5) -Force
 
 # Write instance-b config (Port 2222, WebAdmin 9081)
-$jsonConfigB = @"
-{
-  "common": { "idle_timeout": 15 },
-  "sftpd": { "bindings": [ { "port": 2222, "address": "0.0.0.0" } ] },
-  "httpd": {
-    "bindings": [ { "port": 9081, "address": "0.0.0.0", "enable_web_admin": true, "enable_web_client": true, "enable_rest_api": true } ],
-    "templates_path": "templates",
-    "static_files_path": "static",
-    "openapi_path": "openapi"
-  },
-  "smtp": { "templates_path": "templates" },
-  "data_provider": {
-    "driver": "sqlite",
-    "name": "$($instBDir.Replace('\', '\\'))\\sftpgo.db"
-  }
+$configBObj = @{
+    common = @{ idle_timeout = 15 }
+    sftpd = @{ bindings = @( @{ port = 2222; address = "0.0.0.0" } ) }
+    httpd = @{
+        bindings = @( @{ port = 9081; address = "0.0.0.0"; enable_web_admin = $true; enable_web_client = $true; enable_rest_api = $true } )
+        templates_path = "templates"
+        static_files_path = "static"
+        openapi_path = "openapi"
+    }
+    smtp = @{ templates_path = "templates" }
+    data_provider = @{
+        driver = "sqlite"
+        name = (Join-Path $instBDir "sftpgo.db")
+    }
 }
-"@
-Set-Content -Path (Join-Path $instBConfig "sftpgo.json") -Value $jsonConfigB -Force
+Set-Content -Path (Join-Path $instBConfig "sftpgo.json") -Value ($configBObj | ConvertTo-Json -Depth 5) -Force
 
 # Write users_seed.json for Source (mft_source)
-$seedUserA = @"
-{
-  "users": [
-    {
-      "username": "mft_source",
-      "password": "source_pass",
-      "status": 1,
-      "home_dir": "$($srcBaseDir.Replace('\', '\\'))",
-      "permissions": {
-        "/": [ "list", "download", "delete" ]
-      }
-    }
-  ]
+$seedUserAObj = @{
+    users = @(
+        @{
+            username = "mft_source"
+            password = "source_pass"
+            status = 1
+            home_dir = $srcBaseDir
+            permissions = @{
+                "/" = @("list", "download", "delete")
+            }
+        }
+    )
 }
-"@
-Set-Content -Path (Join-Path $instAConfig "users_seed.json") -Value $seedUserA -Force
+Set-Content -Path (Join-Path $instAConfig "users_seed.json") -Value ($seedUserAObj | ConvertTo-Json -Depth 5) -Force
 
 # Write users_seed.json for Destination (mft_destination)
-$seedUserB = @"
-{
-  "users": [
-    {
-      "username": "mft_destination",
-      "password": "dest_pass",
-      "status": 1,
-      "home_dir": "$($dstBaseDir.Replace('\', '\\'))",
-      "permissions": {
-        "/": [ "list", "download", "upload", "overwrite", "rename", "create_dirs", "delete" ]
-      }
-    }
-  ]
+$seedUserBObj = @{
+    users = @(
+        @{
+            username = "mft_destination"
+            password = "dest_pass"
+            status = 1
+            home_dir = $dstBaseDir
+            permissions = @{
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
+            }
+        }
+    )
 }
-"@
-Set-Content -Path (Join-Path $instBConfig "users_seed.json") -Value $seedUserB -Force
-      }
-    }
-  ]
-}
-"@
-Set-Content -Path (Join-Path $instBConfig "users_seed.json") -Value $seedUserB -Force
+Set-Content -Path (Join-Path $instBConfig "users_seed.json") -Value ($seedUserBObj | ConvertTo-Json -Depth 5) -Force
 
 Write-Host "  Source Server A     : Port 2022 (SFTP) | WebAdmin: http://localhost:9080" -ForegroundColor Green
 Write-Host "    Folder            : $srcUploadDir" -ForegroundColor DarkGray
@@ -285,7 +270,7 @@ Write-Host "    Folder            : $dstIncomingDir" -ForegroundColor DarkGray
 Write-Host "    User / Pass       : mft_destination / dest_pass" -ForegroundColor DarkGray
 
 # 4. Provision MFT Workspace Directories
-Write-Host "`n[4/6] Initializing MFT Engine Storage & State..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Initializing MFT Engine Storage and State..." -ForegroundColor Yellow
 $workspaceDir = Join-Path $RepoRoot "workspace"
 New-Item -ItemType Directory -Path (Join-Path $workspaceDir "downloads"), (Join-Path $workspaceDir "staging"), (Join-Path $workspaceDir "quarantine"), (Join-Path $workspaceDir "status") -Force | Out-Null
 Write-Host "  OK: Workspace verified at $workspaceDir" -ForegroundColor Green
@@ -309,8 +294,8 @@ if (-not (Test-Path $jarPath)) {
 }
 Write-Host "  OK: Executable JAR ready at $jarPath" -ForegroundColor Green
 
-# 6. Launch Services & Open Web Dashboards
-Write-Host "`n[6/6] Starting Services & Launching Control Panels..." -ForegroundColor Yellow
+# 6. Launch Services and Open Web Dashboards
+Write-Host "`n[6/6] Starting Services and Launching Control Panels..." -ForegroundColor Yellow
 
 # Kill any previous stale instances
 Get-Process -Name "sftpgo" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -342,7 +327,7 @@ for ($i = 0; $i -lt 20; $i++) {
 
 if ($started) {
     Write-Host "`n=================================================================" -ForegroundColor Green
-    Write-Host "   SUCCESS: All Services Are Running & Ready!                   " -ForegroundColor Green
+    Write-Host "   SUCCESS: All Services Are Running and Ready!                 " -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Green
 } else {
     Write-Host "`nServices started in background. Connecting to dashboards..." -ForegroundColor Yellow
