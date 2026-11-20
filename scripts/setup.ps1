@@ -119,18 +119,74 @@ if (-not (Test-Path $sftpgoExe)) {
     Write-Host "  OK: SFTPGo binary found at $sftpgoExe" -ForegroundColor Green
 }
 
-# 3. Provision Server A and Server B Configuration & Data Directories
-Write-Host "`n[3/6] Provisioning Dual SFTP Servers & Seed Users..." -ForegroundColor Yellow
+# 3. Configure Source & Destination Folders and Provision Dual SFTP Servers
+Write-Host "`n[3/6] Configuring Source & Destination Transfer Folders..." -ForegroundColor Yellow
+
+function Resolve-FolderStructure([string]$inputPath, [string]$defaultSubfolder) {
+    $trimmed = $inputPath.TrimEnd('\').TrimEnd('/')
+    $leaf = Split-Path $trimmed -Leaf
+    if ($leaf -ieq $defaultSubfolder) {
+        $base = Split-Path $trimmed -Parent
+        $target = $trimmed
+    } else {
+        $base = $trimmed
+        $target = Join-Path $trimmed $defaultSubfolder
+    }
+    return @{ Base = $base; Target = $target }
+}
+
+$defaultSource = if (Test-Path "D:\sftpgo\instance-a\data\mft_source\upload") {
+    "D:\sftpgo\instance-a\data\mft_source\upload"
+} else {
+    Join-Path $RepoRoot "data\source\upload"
+}
+
+$defaultDest = if (Test-Path "D:\sftpgo\instance-b\data\mft_destination\incoming") {
+    "D:\sftpgo\instance-b\data\mft_destination\incoming"
+} else {
+    Join-Path $RepoRoot "data\destination\incoming"
+}
+
+Write-Host "Where would you like to drop source files for transfer?" -ForegroundColor Cyan
+Write-Host "  [Press Enter to use default: $defaultSource]" -ForegroundColor DarkGray
+try {
+    $inputSource = Read-Host "  Source Folder"
+} catch { $inputSource = "" }
+if ([string]::IsNullOrWhiteSpace($inputSource)) {
+    $inputSource = $defaultSource
+}
+
+Write-Host "`nWhere would you like destination files to arrive?" -ForegroundColor Cyan
+Write-Host "  [Press Enter to use default: $defaultDest]" -ForegroundColor DarkGray
+try {
+    $inputDest = Read-Host "  Destination Folder"
+} catch { $inputDest = "" }
+if ([string]::IsNullOrWhiteSpace($inputDest)) {
+    $inputDest = $defaultDest
+}
+
+$srcStruct = Resolve-FolderStructure $inputSource "upload"
+$dstStruct = Resolve-FolderStructure $inputDest "incoming"
+
+$srcUploadDir = $srcStruct.Target
+$srcBaseDir = $srcStruct.Base
+
+$dstIncomingDir = $dstStruct.Target
+$dstBaseDir = $dstStruct.Base
 
 $instADir = Join-Path $sftpgoDir "instance-a"
 $instBDir = Join-Path $sftpgoDir "instance-b"
 $instAConfig = Join-Path $instADir "config"
 $instBConfig = Join-Path $instBDir "config"
 
-$srcUploadDir = Join-Path $instADir "data\mft_source\upload"
-$dstIncomingDir = Join-Path $instBDir "data\mft_destination\incoming"
-
 New-Item -ItemType Directory -Path $instAConfig, $instBConfig, $srcUploadDir, $dstIncomingDir -Force | Out-Null
+
+# Save paths to paths.json
+$pathsConfig = @{
+    source_folder = $srcUploadDir
+    destination_folder = $dstIncomingDir
+}
+Set-Content -Path (Join-Path $PSScriptRoot "paths.json") -Value ($pathsConfig | ConvertTo-Json -Depth 2) -Force
 
 # Copy web UI static / templates / openapi if available in bundle
 $bundleDir = Join-Path $RepoRoot "sftpgo-bundle"
@@ -187,7 +243,7 @@ $seedUserA = @"
       "username": "mft_source",
       "password": "source_pass",
       "status": 1,
-      "home_dir": "$((Join-Path $instADir 'data\mft_source').Replace('\', '\\'))",
+      "home_dir": "$($srcBaseDir.Replace('\', '\\'))",
       "permissions": {
         "/": [ "list", "download", "delete" ]
       }
@@ -205,9 +261,15 @@ $seedUserB = @"
       "username": "mft_destination",
       "password": "dest_pass",
       "status": 1,
-      "home_dir": "$((Join-Path $instBDir 'data\mft_destination').Replace('\', '\\'))",
+      "home_dir": "$($dstBaseDir.Replace('\', '\\'))",
       "permissions": {
         "/": [ "list", "download", "upload", "overwrite", "rename", "create_dirs", "delete" ]
+      }
+    }
+  ]
+}
+"@
+Set-Content -Path (Join-Path $instBConfig "users_seed.json") -Value $seedUserB -Force
       }
     }
   ]

@@ -1,0 +1,4 @@
+{
+  "source_folder": "D:\\sftpgo\\instance-a\\data\\mft_source\\upload",
+  "destination_folder": "D:\\sftpgo\\instance-b\\data\\mft_destination\\incoming"
+}

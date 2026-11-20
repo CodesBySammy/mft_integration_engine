@@ -67,3 +67,11 @@ Start-Process "http://localhost:9080/web/admin"
 Start-Process "http://localhost:9081/web/admin"
 
 Write-Host "All services started! Dashboards opened." -ForegroundColor Green
+
+$pathsFile = Join-Path $PSScriptRoot "paths.json"
+if (Test-Path $pathsFile) {
+    $paths = Get-Content $pathsFile -Raw | ConvertFrom-Json
+    Write-Host "`nTransfer Folders:" -ForegroundColor Cyan
+    Write-Host "  -> Drop files in  : $($paths.source_folder)" -ForegroundColor White
+    Write-Host "  -> Arrives at     : $($paths.destination_folder)" -ForegroundColor White
+}

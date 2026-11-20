@@ -1,3 +1,3 @@
 @echo off
 title Open MFT Source and Destination Folders
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$src = if (Test-Path 'D:\sftpgo\instance-a\data\mft_source\upload') { 'D:\sftpgo\instance-a\data\mft_source\upload' } else { (Join-Path (Resolve-Path '%~dp0') 'sftpgo\instance-a\data\mft_source\upload') }; $dst = if (Test-Path 'D:\sftpgo\instance-b\data\mft_destination\incoming') { 'D:\sftpgo\instance-b\data\mft_destination\incoming' } else { (Join-Path (Resolve-Path '%~dp0') 'sftpgo\instance-b\data\mft_destination\incoming') }; Start-Process explorer.exe $src; Start-Process explorer.exe $dst"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\open-folders.ps1"
