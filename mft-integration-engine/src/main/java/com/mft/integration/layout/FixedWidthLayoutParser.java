@@ -11,7 +11,8 @@ import java.util.Map;
 
 /**
  * High-performance byte-boundary fixed-width parser.
- * Safely extracts field slices using exact byte boundaries rather than assuming character offsets.
+ * Safely extracts field slices using exact byte boundaries rather than assuming
+ * character offsets.
  */
 @Component
 public class FixedWidthLayoutParser {
@@ -20,7 +21,7 @@ public class FixedWidthLayoutParser {
      * Parses a single fixed-width record line according to the layout definition.
      *
      * @param recordBytes raw bytes of the line (excluding CR/LF)
-     * @param layout layout specification
+     * @param layout      layout specification
      * @return Map of field name -> trimmed string value
      */
     public Map<String, String> parseRecord(byte[] recordBytes, LayoutDefinition layout) {
