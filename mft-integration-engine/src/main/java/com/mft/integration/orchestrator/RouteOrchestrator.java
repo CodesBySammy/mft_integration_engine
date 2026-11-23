@@ -28,7 +28,9 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Main route orchestration engine.
@@ -54,6 +56,8 @@ public class RouteOrchestrator {
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.mft.integration.connection.ConnectionResolver connectionResolver;
+
+    private final Map<String, Instant> duplicateAuditThrottle = new ConcurrentHashMap<>();
 
     public RouteOrchestrator(RouteRegistry routeRegistry,
                              ReadAdapter readAdapter,
@@ -163,7 +167,38 @@ public class RouteOrchestrator {
                 } else {
                     skippedCount++;
                     completedRuns.add(transferRun);
-                    // Do not save duplicate skip run to statusService to prevent flooding status history
+                    // Register skip record in statusService with stable key to show on dashboard without storage bloat
+                    TransferRun skipRecord = new TransferRun(
+                            "SKIP_" + routeId + "_" + remoteFile.getFilename(),
+                            routeId,
+                            route.getSourceConnectionId(),
+                            route.getDestinationConnectionId(),
+                            remoteFile.getFilename()
+                    );
+                    skipRecord.setStatus(TransferStatus.SKIPPED_DUPLICATE);
+                    skipRecord.setSourceChecksum(transferRun.getSourceChecksum());
+                    skipRecord.setOutputChecksum(transferRun.getSourceChecksum());
+                    skipRecord.setBytesTransferred(transferRun.getBytesTransferred());
+                    skipRecord.setEndTime(Instant.now());
+                    statusService.registerRun(skipRecord);
+
+                    // Throttle duplicate audit events so we don't spam disk on every 5s polling cycle
+                    String auditThrottleKey = routeId + ":" + remoteFile.getFilename();
+                    Instant lastAudit = duplicateAuditThrottle.get(auditThrottleKey);
+                    if (lastAudit == null || lastAudit.isBefore(Instant.now().minusSeconds(60))) {
+                        duplicateAuditThrottle.put(auditThrottleKey, Instant.now());
+                        auditService.recordEvent(
+                                itemRunId,
+                                routeId,
+                                address,
+                                "SKIPPED_DUPLICATE",
+                                remoteFile.getFilename(),
+                                null,
+                                "SKIPPED",
+                                null,
+                                "Duplicate file detected [" + remoteFile.getFilename() + "] (checksum matches previously transferred file). Zero re-transfer guarantee preserved."
+                        );
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed transfer of file [{}] in run [{}]: {}", remoteFile.getFilename(), runId, e.getMessage());
@@ -217,6 +252,7 @@ public class RouteOrchestrator {
         long actualSize = Files.size(localDownloadPath);
         String sourceChecksum = checksumService.calculateChecksum(localDownloadPath, route.getChecksumAlgorithm());
         transferRun.setSourceChecksum(sourceChecksum);
+        transferRun.setBytesTransferred(actualSize);
 
         IdempotencyKey idempotencyKey = new IdempotencyKey(
                 route.getRouteId(),
@@ -231,6 +267,7 @@ public class RouteOrchestrator {
             log.debug("Duplicate file detected for route [{}] file [{}] (checksum: {}). Skipping transfer to destination.",
                     route.getRouteId(), filename, sourceChecksum);
             transferRun.setStatus(TransferStatus.SKIPPED_DUPLICATE);
+            transferRun.setBytesTransferred(actualSize);
             transferRun.setEndTime(Instant.now());
             return false;
         }

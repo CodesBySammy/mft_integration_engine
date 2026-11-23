@@ -246,10 +246,37 @@
       border: 1px solid rgba(52, 211, 153, 0.2);
     }
 
+    .badge-skipped {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
     .badge-failed {
       background: var(--danger-bg);
       color: #f87171;
       border: 1px solid rgba(248, 113, 113, 0.2);
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 0.35rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-btn:hover {
+      background: var(--border);
+      color: #fff;
+    }
+    .filter-btn.active-filter {
+      background: rgba(37, 99, 235, 0.2);
+      border-color: #3b82f6;
+      color: #93c5fd;
+      font-weight: 600;
     }
 
     .badge-route {
@@ -349,9 +376,14 @@
     <!-- Quick Stats -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-title">Transferred Files</div>
-        <div class="stat-val" id="statCompleted">0</div>
-        <div class="stat-sub">Persisted on disk</div>
+        <div class="stat-title">Transferred Files (Success)</div>
+        <div class="stat-val" id="statCompleted" style="color: #34d399;">0</div>
+        <div class="stat-sub">Persisted on destination</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Skipped (Duplicates)</div>
+        <div class="stat-val" id="statSkipped" style="color: #fbbf24;">0</div>
+        <div class="stat-sub">Zero re-transfer guarantee</div>
       </div>
       <div class="stat-card">
         <div class="stat-title">Source Server A</div>
@@ -360,13 +392,8 @@
       </div>
       <div class="stat-card">
         <div class="stat-title">Destination Server B</div>
-        <div class="stat-val" style="font-size: 1.15rem; color: #34d399;">Port 2222 (SFTP)</div>
+        <div class="stat-val" style="font-size: 1.15rem; color: #a78bfa;">Port 2222 (SFTP)</div>
         <div class="stat-sub"><code>/incoming</code></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Idempotency Policy</div>
-        <div class="stat-val" style="font-size: 1.15rem; color: #fbbf24;">Deduplication ON</div>
-        <div class="stat-sub">Files transferred once only</div>
       </div>
     </div>
 
@@ -394,13 +421,18 @@
       </div>
     </div>
 
-    <!-- Transferred Files Table -->
+    <!-- Transferred & Verified Files Table -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">
-          <span>Transferred Files Ledger</span>
+          <span>Transferred &amp; Verified Files Ledger</span>
         </div>
-        <button class="btn-outline" onclick="loadTransfers()">Refresh Now</button>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <button class="filter-btn active-filter" id="btn-filter-all" onclick="setFilter('ALL')">All (<span id="count-all">0</span>)</button>
+          <button class="filter-btn" id="btn-filter-success" onclick="setFilter('SUCCESS')">&#10003; Transferred (<span id="count-success">0</span>)</button>
+          <button class="filter-btn" id="btn-filter-skipped" onclick="setFilter('SKIPPED')">&#9888; Skipped (<span id="count-skipped">0</span>)</button>
+          <button class="btn-outline" onclick="loadTransfers()">Refresh Now</button>
+        </div>
       </div>
 
       <div style="overflow-x: auto;">
@@ -508,73 +540,102 @@
       }
     }
 
+    let currentFilter = 'ALL';
+    let cachedTransfers = [];
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-filter'));
+      const activeBtn = document.getElementById('btn-filter-' + filter.toLowerCase());
+      if (activeBtn) activeBtn.classList.add('active-filter');
+      renderTransfersTable();
+    }
+
     async function loadTransfers() {
       try {
         const res = await fetch('/api/transfers');
         if (!res.ok) return;
         const json = await res.json();
-        const tbody = document.getElementById('transfersBody');
-        const data = json.data || [];
-
-        // Count completed
-        const completedRuns = data.filter(d => d.status === 'COMPLETED');
-        document.getElementById('statCompleted').innerText = completedRuns.length;
-
-        if (data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No files transferred yet. Drop a file into the upload folder to begin.</td></tr>';
-          return;
-        }
-
-        // Deduplicate: prefer COMPLETED records for each source file
-        const fileMap = new Map();
-        for (const item of data) {
-          if (!item.sourceFilename) continue;
-          if (item.sourceFilename.startsWith('idempotency_test_')) continue;
-
-          const existing = fileMap.get(item.sourceFilename);
-          if (!existing) {
-            fileMap.set(item.sourceFilename, item);
-          } else if (item.status === 'COMPLETED') {
-            fileMap.set(item.sourceFilename, item);
-          } else if (existing.status !== 'COMPLETED') {
-            fileMap.set(item.sourceFilename, item);
-          }
-        }
-
-        const deduplicated = Array.from(fileMap.values());
-        deduplicated.sort((a, b) => {
-          const tA = (typeof a.endTime === 'number' ? a.endTime * 1000 : new Date(a.endTime || a.startTime || 0).getTime());
-          const tB = (typeof b.endTime === 'number' ? b.endTime * 1000 : new Date(b.endTime || b.startTime || 0).getTime());
-          return tB - tA;
-        });
-
-        tbody.innerHTML = deduplicated.map(t => {
-          const isDone = t.status === 'COMPLETED';
-          const badgeClass = isDone ? 'badge-completed' : 'badge-failed';
-          const checksum = t.outputChecksum || t.sourceChecksum || '-';
-          const shortHash = checksum.length > 20 ? checksum.substring(0, 16) + '...' : checksum;
-          const timeStr = formatTime(t.endTime || t.startTime);
-          const sizeStr = formatBytes(t.bytesTransferred);
-          const exactAddr = 'localhost:2022/upload &rarr; localhost:2222/incoming';
-          const runId = t.runId || '-';
-
-          return `
-            <tr>
-              <td><strong style="color: #fff;">${t.sourceFilename || '-'}</strong></td>
-              <td>
-                <span class="badge badge-conn" style="font-size: 0.73rem; display: inline-block; margin-bottom: 0.25rem;">${exactAddr}</span>
-                <span class="badge badge-run" style="font-size: 0.7rem; display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Transfer Run ID: ${runId}">ID: ${runId}</span>
-              </td>
-              <td><span class="badge ${badgeClass}">${t.status || 'UNKNOWN'}</span></td>
-              <td>${sizeStr}</td>
-              <td><span class="hash-code" title="${checksum}">${shortHash}</span></td>
-              <td>${timeStr}</td>
-            </tr>
-          `;
-        }).join('');
+        cachedTransfers = json.data || [];
+        renderTransfersTable();
       } catch (e) {
         console.error('Failed to load transfers:', e);
       }
+    }
+
+    function renderTransfersTable() {
+      const tbody = document.getElementById('transfersBody');
+      const data = cachedTransfers.filter(item => {
+        if (!item.sourceFilename) return false;
+        if (item.sourceFilename.startsWith('idempotency_test_')) return false;
+        return true;
+      });
+
+      // Count stats
+      const completedList = data.filter(d => d.status === 'COMPLETED');
+      const skippedList = data.filter(d => d.status === 'SKIPPED_DUPLICATE');
+
+      document.getElementById('statCompleted').innerText = completedList.length;
+      document.getElementById('statSkipped').innerText = skippedList.length;
+
+      const countAllEl = document.getElementById('count-all');
+      const countSuccEl = document.getElementById('count-success');
+      const countSkipEl = document.getElementById('count-skipped');
+      if (countAllEl) countAllEl.innerText = data.length;
+      if (countSuccEl) countSuccEl.innerText = completedList.length;
+      if (countSkipEl) countSkipEl.innerText = skippedList.length;
+
+      let filteredData = data;
+      if (currentFilter === 'SUCCESS') {
+        filteredData = completedList;
+      } else if (currentFilter === 'SKIPPED') {
+        filteredData = skippedList;
+      }
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No files found for filter [${currentFilter}].</td></tr>`;
+        return;
+      }
+
+      filteredData.sort((a, b) => {
+        const tA = (typeof a.endTime === 'number' ? a.endTime * 1000 : new Date(a.endTime || a.startTime || 0).getTime());
+        const tB = (typeof b.endTime === 'number' ? b.endTime * 1000 : new Date(b.endTime || b.startTime || 0).getTime());
+        return tB - tA;
+      });
+
+      tbody.innerHTML = filteredData.map(t => {
+        let badgeClass = 'badge-failed';
+        let statusLabel = t.status || 'UNKNOWN';
+
+        if (t.status === 'COMPLETED') {
+          badgeClass = 'badge-completed';
+          statusLabel = '&#10003; SUCCESS (Transferred)';
+        } else if (t.status === 'SKIPPED_DUPLICATE') {
+          badgeClass = 'badge-skipped';
+          statusLabel = '&#9888; SKIPPED (Duplicate)';
+        }
+
+        const checksum = t.outputChecksum || t.sourceChecksum || '-';
+        const shortHash = checksum.length > 20 ? checksum.substring(0, 16) + '...' : checksum;
+        const timeStr = formatTime(t.endTime || t.startTime);
+        const sizeStr = formatBytes(t.bytesTransferred);
+        const exactAddr = 'localhost:2022/upload &rarr; localhost:2222/incoming';
+        const runId = t.runId || '-';
+
+        return `
+          <tr>
+            <td><strong style="color: #fff;">${t.sourceFilename || '-'}</strong></td>
+            <td>
+              <span class="badge badge-conn" style="font-size: 0.73rem; display: inline-block; margin-bottom: 0.25rem;">${exactAddr}</span>
+              <span class="badge badge-run" style="font-size: 0.7rem; display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Transfer Run ID: ${runId}">ID: ${runId}</span>
+            </td>
+            <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
+            <td>${sizeStr}</td>
+            <td><span class="hash-code" title="${checksum}">${shortHash}</span></td>
+            <td>${timeStr}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     async function loadAudit() {
@@ -637,8 +698,9 @@
         box.innerHTML = data.slice(-30).reverse().map(e => {
           const time = formatTime(e.timestamp);
           const isDone = e.status === 'COMPLETED' || e.status === 'STARTED';
+          const isSkipped = e.status === 'SKIPPED';
           const isFailed = e.status === 'FAILED';
-          const badgeClass = isDone ? 'badge-completed' : (isFailed ? 'badge-failed' : 'badge-route');
+          const badgeClass = isDone ? 'badge-completed' : (isSkipped ? 'badge-skipped' : (isFailed ? 'badge-failed' : 'badge-route'));
 
           // Exact Address (source -> destination address)
           const exactAddr = resolveExactAddress(e);
