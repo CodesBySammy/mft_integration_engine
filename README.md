@@ -3,7 +3,7 @@
 [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net)
 [![Spring Boot 4.2.0](https://img.shields.io/badge/Spring%20Boot-4.2.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-104%20Passing-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-105%20Passing-success.svg)]()
 
 An enterprise-grade, configuration-driven **Managed File Transfer (MFT)** engine built with **Java 21** and **Spring Boot 4.2.0**, featuring dual SFTP connectivity, automated SHA-256 integrity checks, persistent idempotency with a zero duplicate re-transfer guarantee, and a real-time reactive Web Control Dashboard.
 
