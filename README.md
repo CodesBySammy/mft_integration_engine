@@ -9,6 +9,17 @@ An enterprise-grade, configuration-driven **Managed File Transfer (MFT)** engine
 
 ---
 
+## ⚡ Instant Download (No Git / Maven Required)
+
+For end-users who do not want to clone the source code:
+
+1. Download the pre-built standalone package from GitHub Releases:
+   👉 **[Download mft-enterprise-engine-windows-x64.zip](https://github.com/CodesBySammy/mft_integration_engine/releases/latest)**
+2. Unzip the package to any folder.
+3. Double-click **`setup.bat`** (prompts for your custom folder locations or defaults, bootstraps SFTP servers, creates users, and launches the dashboards).
+
+---
+
 ## Key Features
 
 - **1-Click Automated Setup:** Run `setup.bat` to automatically provision everything: downloads SFTPGo portable binary, sets up Source and Destination SFTP servers, creates user credentials, compiles the engine, and opens all dashboards in your browser.
