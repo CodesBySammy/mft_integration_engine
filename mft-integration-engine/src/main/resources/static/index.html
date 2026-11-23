@@ -428,6 +428,17 @@
           <span>Transferred &amp; Verified Files Ledger</span>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <div style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--text-muted); margin-right: 0.25rem;">
+            <span>Show:</span>
+            <select id="pageSizeSelect" onchange="changePageSize(this.value)" style="background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 0.25rem 0.5rem; border-radius: 0.35rem; font-size: 0.8rem; cursor: pointer; outline: none;">
+              <option value="5" selected>5 records</option>
+              <option value="10">10 records</option>
+              <option value="20">20 records</option>
+              <option value="25">25 records</option>
+              <option value="50">50 records</option>
+              <option value="ALL">All records</option>
+            </select>
+          </div>
           <button class="filter-btn active-filter" id="btn-filter-all" onclick="setFilter('ALL')">All (<span id="count-all">0</span>)</button>
           <button class="filter-btn" id="btn-filter-success" onclick="setFilter('SUCCESS')">&#10003; Transferred (<span id="count-success">0</span>)</button>
           <button class="filter-btn" id="btn-filter-skipped" onclick="setFilter('SKIPPED')">&#9888; Skipped (<span id="count-skipped">0</span>)</button>
@@ -455,6 +466,16 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div id="paginationBar" style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 1px solid var(--border); margin-top: 0.5rem; font-size: 0.82rem; color: var(--text-muted); flex-wrap: wrap; gap: 0.5rem;">
+        <div id="paginationInfo">Showing 1 to 5 of 0 records</div>
+        <div style="display: flex; gap: 0.35rem; align-items: center;">
+          <button class="filter-btn" id="btn-prev-page" onclick="changePage(-1)">&larr; Previous</button>
+          <span id="pageIndicator" style="padding: 0 0.5rem; font-weight: 600; color: #fff;">Page 1 of 1</span>
+          <button class="filter-btn" id="btn-next-page" onclick="changePage(1)">Next &rarr;</button>
+        </div>
       </div>
     </div>
 
@@ -542,9 +563,23 @@
 
     let currentFilter = 'ALL';
     let cachedTransfers = [];
+    let pageSize = 5;
+    let currentPage = 1;
+
+    function changePageSize(val) {
+      pageSize = val === 'ALL' ? Infinity : parseInt(val, 10);
+      currentPage = 1;
+      renderTransfersTable();
+    }
+
+    function changePage(delta) {
+      currentPage += delta;
+      renderTransfersTable();
+    }
 
     function setFilter(filter) {
       currentFilter = filter;
+      currentPage = 1;
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-filter'));
       const activeBtn = document.getElementById('btn-filter-' + filter.toLowerCase());
       if (activeBtn) activeBtn.classList.add('active-filter');
@@ -592,7 +627,42 @@
         filteredData = skippedList;
       }
 
-      if (filteredData.length === 0) {
+      const totalRecords = filteredData.length;
+      const effectivePageSize = (pageSize === Infinity || !pageSize) ? totalRecords : pageSize;
+      const totalPages = Math.max(1, Math.ceil(totalRecords / (effectivePageSize || 1)));
+
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const startIndex = (currentPage - 1) * effectivePageSize;
+      const endIndex = Math.min(startIndex + effectivePageSize, totalRecords);
+
+      // Update Pagination Bar UI
+      const infoEl = document.getElementById('paginationInfo');
+      const pageIndEl = document.getElementById('pageIndicator');
+      const btnPrev = document.getElementById('btn-prev-page');
+      const btnNext = document.getElementById('btn-next-page');
+
+      if (infoEl) {
+        infoEl.innerText = totalRecords > 0 
+          ? `Showing ${startIndex + 1} to ${endIndex} of ${totalRecords} records`
+          : `Showing 0 records`;
+      }
+      if (pageIndEl) {
+        pageIndEl.innerText = `Page ${currentPage} of ${totalPages}`;
+      }
+      if (btnPrev) {
+        btnPrev.disabled = (currentPage <= 1);
+        btnPrev.style.opacity = (currentPage <= 1) ? '0.4' : '1';
+        btnPrev.style.cursor = (currentPage <= 1) ? 'not-allowed' : 'pointer';
+      }
+      if (btnNext) {
+        btnNext.disabled = (currentPage >= totalPages);
+        btnNext.style.opacity = (currentPage >= totalPages) ? '0.4' : '1';
+        btnNext.style.cursor = (currentPage >= totalPages) ? 'not-allowed' : 'pointer';
+      }
+
+      if (totalRecords === 0) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No files found for filter [${currentFilter}].</td></tr>`;
         return;
       }
@@ -603,7 +673,9 @@
         return tB - tA;
       });
 
-      tbody.innerHTML = filteredData.map(t => {
+      const pageData = filteredData.slice(startIndex, endIndex);
+
+      tbody.innerHTML = pageData.map(t => {
         let badgeClass = 'badge-failed';
         let statusLabel = t.status || 'UNKNOWN';
 
