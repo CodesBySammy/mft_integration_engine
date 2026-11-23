@@ -97,19 +97,39 @@ if (-not (Test-Path $sftpgoExe)) {
         $sftpgoDir = "D:\sftpgo"
         $sftpgoExe = "D:\sftpgo\sftpgo.exe"
     } else {
-        Write-Host "  SFTPGo binary not found locally. Downloading portable SFTPGo v2.6.2 for Windows..." -ForegroundColor Cyan
+        Write-Host "  SFTPGo binary not found locally. Downloading portable SFTPGo for Windows..." -ForegroundColor Cyan
         New-Item -ItemType Directory -Path $sftpgoDir -Force | Out-Null
         $zipPath = Join-Path $sftpgoDir "sftpgo.zip"
-        $downloadUrl = "https://github.com/drakkan/sftpgo/releases/download/v2.6.2/sftpgo_v2.6.2_windows_x86_64.zip"
+        $downloadUrls = @(
+            "https://github.com/drakkan/sftpgo/releases/download/v2.6.2/sftpgo_v2.6.2_windows_portable.zip",
+            "https://github.com/drakkan/sftpgo/releases/download/v2.7.6/sftpgo_v2.7.6_windows_portable.zip"
+        )
 
-        try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
-            Expand-Archive -Path $zipPath -DestinationPath $sftpgoDir -Force
-            Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
-            Write-Host "  Successfully downloaded and unpacked SFTPGo." -ForegroundColor Green
-        } catch {
-            Write-Host "ERROR: Failed to automatically download SFTPGo ($($_.Exception.Message))." -ForegroundColor Red
+        $downloaded = $false
+        foreach ($url in $downloadUrls) {
+            try {
+                Write-Host "  Fetching: $url" -ForegroundColor DarkGray
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                if (Get-Command "curl.exe" -ErrorAction SilentlyContinue) {
+                    & curl.exe -s -L -o $zipPath $url
+                } else {
+                    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+                }
+
+                if ((Test-Path $zipPath) -and ((Get-Item $zipPath).Length -gt 1000000)) {
+                    Expand-Archive -Path $zipPath -DestinationPath $sftpgoDir -Force
+                    Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
+                    $downloaded = $true
+                    Write-Host "  Successfully downloaded and unpacked SFTPGo." -ForegroundColor Green
+                    break
+                }
+            } catch {
+                Write-Host "  Mirror failed, trying next..." -ForegroundColor DarkGray
+            }
+        }
+
+        if (-not $downloaded -or -not (Test-Path $sftpgoExe)) {
+            Write-Host "ERROR: Failed to automatically download SFTPGo." -ForegroundColor Red
             Write-Host "Please place 'sftpgo.exe' inside: $sftpgoDir" -ForegroundColor Yellow
             exit 1
         }
