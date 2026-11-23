@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("local")
+@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
 class TransformLiveRouteIntegrationTest {
 
     @Autowired

@@ -37,6 +37,15 @@ For end-users who do not want to clone the source code:
 
 ---
 
+## 🏢 Enterprise MFT Integration (IBM Sterling, Axway, MOVEit)
+
+The engine was architected as a **12-Factor, Configuration-Driven Enterprise MFT-to-MFT Middleware Layer**.
+While SFTPGo was included for local developer testing, shifting to commercial enterprise MFT systems like **IBM Sterling B2B Integrator / File Gateway** requires **ZERO Java code changes**. All endpoints, authentication (SSH Keys / Passwords), mailbox paths, and ciphers are controlled via `application-prod.yml` and environment variables.
+
+👉 **[Read the Full Enterprise IBM Sterling MFT Integration & Migration Guide](docs/ENTERPRISE_IBM_MFT_INTEGRATION_GUIDE.md)**
+
+---
+
 ## Architecture Diagram
 
 ```

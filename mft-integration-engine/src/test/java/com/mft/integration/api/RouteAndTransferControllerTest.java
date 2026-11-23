@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @ActiveProfiles("local")
+@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
 class RouteAndTransferControllerTest {
 
     @Autowired
