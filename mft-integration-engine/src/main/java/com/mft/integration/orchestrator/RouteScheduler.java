@@ -35,6 +35,8 @@ public class RouteScheduler {
                                 route.getRouteId(), result.getFilesDiscovered(), result.getFilesTransferred(),
                                 result.getFilesSkipped(), result.getFilesFailed());
                     }
+                } catch (com.mft.integration.exception.RouteExecutionLockedException re) {
+                    log.debug("Route [{}] is already executing in another thread. Skipping scheduled poll.", route.getRouteId());
                 } catch (Exception e) {
                     log.error("Scheduled execution of route [{}] failed: {}", route.getRouteId(), e.getMessage());
                 }

@@ -13,10 +13,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * REST controller for inspecting configured transfer routes and triggering executions.
@@ -27,6 +30,7 @@ public class RouteController {
 
     private final RouteRegistry routeRegistry;
     private final RouteOrchestrator routeOrchestrator;
+    private final Map<String, RouteExecutionResponseDto> apiIdempotencyCache = new ConcurrentHashMap<>();
 
     public RouteController(RouteRegistry routeRegistry, RouteOrchestrator routeOrchestrator) {
         this.routeRegistry = routeRegistry;
@@ -50,11 +54,23 @@ public class RouteController {
     @PostMapping("/{routeId}/execute")
     public ResponseEntity<ApiResponse<RouteExecutionResponseDto>> executeRoute(
             @PathVariable String routeId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) RouteExecutionRequest request) {
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            RouteExecutionResponseDto cached = apiIdempotencyCache.get(idempotencyKey);
+            if (cached != null) {
+                return ResponseEntity.ok(ApiResponse.ok("Idempotent response for key: " + idempotencyKey, cached));
+            }
+        }
 
         String patternOverride = request != null ? request.getPatternOverride() : null;
         RouteExecutionResult result = routeOrchestrator.executeRoute(routeId, patternOverride);
         RouteExecutionResponseDto responseDto = new RouteExecutionResponseDto(result);
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            apiIdempotencyCache.put(idempotencyKey, responseDto);
+        }
 
         String message = result.isSuccess()
                 ? "Route executed successfully: " + result.getMessage()

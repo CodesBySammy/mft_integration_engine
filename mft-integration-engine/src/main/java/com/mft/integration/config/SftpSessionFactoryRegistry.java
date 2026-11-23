@@ -61,6 +61,14 @@ public class SftpSessionFactoryRegistry {
         rawFactory.setUser(def.getUsername());
         rawFactory.setTimeout(def.getConnectionTimeoutMs());
 
+        // Enterprise socket & SSH resilience configuration
+        rawFactory.setSshClientConfigurer(client -> {
+            org.apache.sshd.core.CoreModuleProperties.HEARTBEAT_INTERVAL.set(client, java.time.Duration.ofSeconds(15));
+            org.apache.sshd.core.CoreModuleProperties.IDLE_TIMEOUT.set(client, java.time.Duration.ofSeconds(60));
+            org.apache.sshd.core.CoreModuleProperties.SOCKET_KEEPALIVE.set(client, true);
+            org.apache.sshd.core.CoreModuleProperties.TCP_NODELAY.set(client, true);
+        });
+
         // Credential resolution
         if (def.getAuthenticationType() == AuthenticationType.PASSWORD) {
             String password = credentialProvider.resolvePassword(def);

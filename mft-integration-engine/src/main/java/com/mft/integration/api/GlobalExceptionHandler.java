@@ -1,9 +1,11 @@
 package com.mft.integration.api;
 
 import com.mft.integration.api.dto.ErrorResponse;
+import com.mft.integration.exception.ConcurrencyLimitExceededException;
 import com.mft.integration.exception.FileProcessingException;
 import com.mft.integration.exception.IntegrityException;
 import com.mft.integration.exception.MftException;
+import com.mft.integration.exception.RouteExecutionLockedException;
 import com.mft.integration.exception.SftpConnectionException;
 import com.mft.integration.exception.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,6 +43,20 @@ public class GlobalExceptionHandler {
         log.warn("Method argument validation failed on [{}]: {}", request.getRequestURI(), details);
         ErrorResponse error = new ErrorResponse("INVALID_ARGUMENT", details, request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(RouteExecutionLockedException.class)
+    public ResponseEntity<ErrorResponse> handleRouteExecutionLocked(RouteExecutionLockedException ex, HttpServletRequest request) {
+        log.warn("Route execution locked on [{}]: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(ex.getErrorCode(), ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(ConcurrencyLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrencyLimitExceeded(ConcurrencyLimitExceededException ex, HttpServletRequest request) {
+        log.warn("Engine concurrency limit exceeded on [{}]: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(ex.getErrorCode(), ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
     }
 
     @ExceptionHandler(IntegrityException.class)

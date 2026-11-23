@@ -62,7 +62,25 @@ public class LocalWorkspaceService {
      * Enforces path containment to reject any path escaping attempt.
      */
     public Path resolvePath(WorkspaceDirectory dir, String filename) {
+        return resolvePath(dir, null, filename);
+    }
+
+    /**
+     * Resolves a local path within a designated workspace subdirectory and optional run-isolated subfolder.
+     * Enforces path containment to eliminate concurrent file overwrite races.
+     */
+    public Path resolvePath(WorkspaceDirectory dir, String subfolder, String filename) {
         Path targetDir = getDirectory(dir);
+        if (subfolder != null && !subfolder.isBlank()) {
+            targetDir = targetDir.resolve(subfolder);
+            try {
+                if (!Files.exists(targetDir)) {
+                    Files.createDirectories(targetDir);
+                }
+            } catch (IOException e) {
+                throw new FileProcessingException("WORKSPACE_DIR_FAILED", "Failed to create directory: " + targetDir, e);
+            }
+        }
         Path targetFile = targetDir.resolve(filename);
         return PathValidationUtil.validateLocalWorkspacePath(targetFile, rootWorkspacePath);
     }

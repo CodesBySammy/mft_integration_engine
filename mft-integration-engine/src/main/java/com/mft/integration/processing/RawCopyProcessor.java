@@ -43,14 +43,18 @@ public class RawCopyProcessor {
      * @return RawCopyResult containing output file and verified checksum
      */
     public RawCopyResult process(Path downloadedFile, ChecksumAlgorithm algorithm) {
+        return process(downloadedFile, algorithm, null);
+    }
+
+    public RawCopyResult process(Path downloadedFile, ChecksumAlgorithm algorithm, String runId) {
         String filename = downloadedFile.getFileName().toString();
-        log.info("Processing RAW_COPY for [{}]", filename);
+        log.info("Processing RAW_COPY for [{}] in run [{}]", filename, runId);
 
         // 1. Calculate input checksum
         String inputChecksum = checksumService.calculateChecksum(downloadedFile, algorithm);
 
-        // 2. Stage raw copy to output directory
-        Path outputFile = workspaceService.resolvePath(WorkspaceDirectory.OUTPUT, filename);
+        // 2. Stage raw copy to output directory with run-level isolation
+        Path outputFile = workspaceService.resolvePath(WorkspaceDirectory.OUTPUT, runId, filename);
         try {
             Files.copy(downloadedFile, outputFile, StandardCopyOption.REPLACE_EXISTING);
             log.debug("Copied raw bytes: [{}] -> [{}] ({} bytes)",

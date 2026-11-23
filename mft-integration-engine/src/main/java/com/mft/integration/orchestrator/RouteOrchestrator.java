@@ -6,7 +6,9 @@ import com.mft.integration.adapter.read.ReadAdapter;
 import com.mft.integration.adapter.write.WriteAdapter;
 import com.mft.integration.audit.AuditService;
 import com.mft.integration.checksum.ChecksumService;
+import com.mft.integration.exception.ConcurrencyLimitExceededException;
 import com.mft.integration.exception.MftException;
+import com.mft.integration.exception.RouteExecutionLockedException;
 import com.mft.integration.idempotency.IdempotencyKey;
 import com.mft.integration.idempotency.IdempotencyService;
 import com.mft.integration.processing.RawCopyProcessor;
@@ -58,6 +60,8 @@ public class RouteOrchestrator {
     private com.mft.integration.connection.ConnectionResolver connectionResolver;
 
     private final Map<String, Instant> duplicateAuditThrottle = new ConcurrentHashMap<>();
+    private final Map<String, java.util.concurrent.locks.ReentrantLock> routeLocks = new ConcurrentHashMap<>();
+    private final java.util.concurrent.Semaphore globalTransferLimiter = new java.util.concurrent.Semaphore(10);
 
     public RouteOrchestrator(RouteRegistry routeRegistry,
                              ReadAdapter readAdapter,
@@ -89,6 +93,33 @@ public class RouteOrchestrator {
 
     public RouteExecutionResult executeRoute(String routeId, String patternOverride) {
         RouteDefinition route = routeRegistry.getRoute(routeId);
+
+        // Guard 1: Route-level execution lock to prevent race conditions & duplicate file collisions
+        java.util.concurrent.locks.ReentrantLock routeLock = routeLocks.computeIfAbsent(routeId, k -> new java.util.concurrent.locks.ReentrantLock());
+        if (!routeLock.tryLock()) {
+            log.warn("Concurrent execution rejected: Route [{}] is already actively executing.", routeId);
+            throw new RouteExecutionLockedException(routeId,
+                    "Route [" + routeId + "] is currently executing. Concurrent execution prevented to eliminate race conditions.");
+        }
+
+        // Guard 2: Global engine concurrency limiter (bulkhead pattern)
+        if (!globalTransferLimiter.tryAcquire()) {
+            routeLock.unlock();
+            log.warn("Global transfer concurrency limit reached (max 10 active transfers). Route [{}] postponed.", routeId);
+            throw new ConcurrencyLimitExceededException(
+                    "Engine concurrency limit reached. Maximum concurrent route transfers are active. Please retry shortly.");
+        }
+
+        try {
+            return doExecuteRoute(route, patternOverride);
+        } finally {
+            globalTransferLimiter.release();
+            routeLock.unlock();
+        }
+    }
+
+    private RouteExecutionResult doExecuteRoute(RouteDefinition route, String patternOverride) {
+        String routeId = route.getRouteId();
         String runId = generateRunId(routeId);
         Instant startTime = Instant.now();
 

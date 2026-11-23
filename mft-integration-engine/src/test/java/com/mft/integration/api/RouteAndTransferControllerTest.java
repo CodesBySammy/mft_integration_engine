@@ -89,4 +89,29 @@ class RouteAndTransferControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").isArray());
     }
+
+    @Test
+    @DisplayName("POST /api/routes/{id}/execute with Idempotency-Key returns cached response on retry")
+    void testExecuteRouteWithIdempotencyKey() throws Exception {
+        String key = "test-idemp-key-" + System.currentTimeMillis();
+        String requestJson = """
+                {
+                    "patternOverride": "positions.txt"
+                }
+                """;
+
+        mockMvc.perform(post("/api/routes/R_RAW_COPY/execute")
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/api/routes/R_RAW_COPY/execute")
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Idempotent response for key")));
+    }
 }
