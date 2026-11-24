@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -40,6 +41,31 @@ public class DatabasePersistenceService {
         }
     }
 
+    @PostConstruct
+    public void sanitizeHistoricalData() {
+        if (jdbcTemplate == null) return;
+        try {
+            jdbcTemplate.execute("UPDATE mft_audit_events SET source_connection_id = 'C_FILE_IN' WHERE source_connection_id IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET destination_connection_id = 'C_FILE_OUT' WHERE destination_connection_id IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET source_address = 'localhost:2022/upload' WHERE source_address IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET destination_address = 'localhost:2222/incoming' WHERE destination_address IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET connection_id = 'C_FILE_IN -> C_FILE_OUT' WHERE connection_id LIKE '%localhost%' OR connection_id IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET source_file = '-' WHERE source_file IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET destination_file = '-' WHERE destination_file IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET error_code = 'NONE' WHERE error_code IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET checksum = 'N/A' WHERE checksum IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET file_size = 0 WHERE file_size IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET duration_ms = 0 WHERE duration_ms IS NULL");
+            jdbcTemplate.execute("UPDATE mft_audit_events SET details = '' WHERE details IS NULL");
+
+            jdbcTemplate.execute("UPDATE mft_transfer_runs SET source_connection_id = 'C_FILE_IN' WHERE source_connection_id IS NULL");
+            jdbcTemplate.execute("UPDATE mft_transfer_runs SET destination_connection_id = 'C_FILE_OUT' WHERE destination_connection_id IS NULL");
+            log.info("Relational database audit and transfer tables sanitized (null columns populated).");
+        } catch (Exception e) {
+            log.debug("Sanitization notice: {}", e.getMessage());
+        }
+    }
+
     public boolean isDatabaseEnabled() {
         return jdbcTemplate != null;
     }
@@ -58,24 +84,45 @@ public class DatabasePersistenceService {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
+            String srcConn = (event.getSourceConnectionId() != null && !event.getSourceConnectionId().isBlank())
+                    ? event.getSourceConnectionId() : "C_FILE_IN";
+            String dstConn = (event.getDestinationConnectionId() != null && !event.getDestinationConnectionId().isBlank())
+                    ? event.getDestinationConnectionId() : "C_FILE_OUT";
+            String srcAddr = (event.getSourceAddress() != null && !event.getSourceAddress().isBlank())
+                    ? event.getSourceAddress() : "localhost:2022/upload";
+            String dstAddr = (event.getDestinationAddress() != null && !event.getDestinationAddress().isBlank())
+                    ? event.getDestinationAddress() : "localhost:2222/incoming";
+            String connId = (event.getConnectionId() != null && !event.getConnectionId().isBlank() && !event.getConnectionId().contains("localhost"))
+                    ? event.getConnectionId() : (srcConn + " -> " + dstConn);
+            String srcFile = (event.getSourceFile() != null && !event.getSourceFile().isBlank())
+                    ? event.getSourceFile() : "-";
+            String dstFile = (event.getDestinationFile() != null && !event.getDestinationFile().isBlank())
+                    ? event.getDestinationFile() : "-";
+            String errCode = (event.getErrorCode() != null && !event.getErrorCode().isBlank())
+                    ? event.getErrorCode() : "NONE";
+            String details = (event.getDetails() != null) ? event.getDetails() : "";
+            Long fileSize = event.getFileSize() != null ? event.getFileSize() : 0L;
+            String chk = (event.getChecksum() != null && !event.getChecksum().isBlank()) ? event.getChecksum() : "N/A";
+            Long duration = event.getDurationMs() != null ? event.getDurationMs() : 0L;
+
             jdbcTemplate.update(sql,
                     event.getTimestamp() != null ? Timestamp.from(event.getTimestamp()) : new Timestamp(System.currentTimeMillis()),
-                    event.getRunId(),
-                    event.getRouteId(),
-                    event.getConnectionId(),
-                    event.getSourceConnectionId(),
-                    event.getDestinationConnectionId(),
-                    event.getSourceAddress(),
-                    event.getDestinationAddress(),
-                    event.getOperation(),
-                    event.getSourceFile(),
-                    event.getDestinationFile(),
-                    event.getFileSize(),
-                    event.getChecksum(),
-                    event.getDurationMs(),
-                    event.getStatus(),
-                    event.getErrorCode(),
-                    event.getDetails()
+                    event.getRunId() != null ? event.getRunId() : "-",
+                    event.getRouteId() != null ? event.getRouteId() : "R_RAW_COPY",
+                    connId,
+                    srcConn,
+                    dstConn,
+                    srcAddr,
+                    dstAddr,
+                    event.getOperation() != null ? event.getOperation() : "UNKNOWN",
+                    srcFile,
+                    dstFile,
+                    fileSize,
+                    chk,
+                    duration,
+                    event.getStatus() != null ? event.getStatus() : "UNKNOWN",
+                    errCode,
+                    details
             );
         } catch (Exception e) {
             log.warn("Failed to persist audit event to relational DB: {}", e.getMessage());

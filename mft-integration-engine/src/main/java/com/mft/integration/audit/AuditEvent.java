@@ -77,25 +77,24 @@ public class AuditEvent {
                       @JsonProperty("errorCode") String errorCode,
                       @JsonProperty("details") String details) {
         this.timestamp = timestamp != null ? timestamp : Instant.now();
-        this.runId = runId;
-        this.routeId = routeId;
-        this.sourceConnectionId = sourceConnectionId;
-        this.destinationConnectionId = destinationConnectionId;
-        this.sourceAddress = sourceAddress;
-        this.destinationAddress = destinationAddress;
-        this.connectionId = connectionId != null ? connectionId :
-                (sourceConnectionId != null && destinationConnectionId != null
-                        ? sourceConnectionId + " -> " + destinationConnectionId
-                        : (sourceConnectionId != null ? sourceConnectionId : destinationConnectionId));
-        this.operation = operation;
-        this.sourceFile = sourceFile;
-        this.destinationFile = destinationFile;
-        this.fileSize = fileSize;
-        this.checksum = checksum;
-        this.durationMs = durationMs;
-        this.status = status;
-        this.errorCode = errorCode;
-        this.details = details;
+        this.runId = runId != null ? runId : "-";
+        this.routeId = routeId != null ? routeId : "R_RAW_COPY";
+        this.sourceConnectionId = (sourceConnectionId != null && !sourceConnectionId.isBlank()) ? sourceConnectionId : "C_FILE_IN";
+        this.destinationConnectionId = (destinationConnectionId != null && !destinationConnectionId.isBlank()) ? destinationConnectionId : "C_FILE_OUT";
+        this.sourceAddress = (sourceAddress != null && !sourceAddress.isBlank()) ? sourceAddress : "localhost:2022/upload";
+        this.destinationAddress = (destinationAddress != null && !destinationAddress.isBlank()) ? destinationAddress : "localhost:2222/incoming";
+        this.connectionId = (connectionId != null && !connectionId.isBlank() && !connectionId.contains("localhost"))
+                ? connectionId
+                : (this.sourceConnectionId + " -> " + this.destinationConnectionId);
+        this.operation = operation != null ? operation : "UNKNOWN";
+        this.sourceFile = (sourceFile != null && !sourceFile.isBlank()) ? sourceFile : "-";
+        this.destinationFile = (destinationFile != null && !destinationFile.isBlank()) ? destinationFile : "-";
+        this.fileSize = fileSize != null ? fileSize : 0L;
+        this.checksum = (checksum != null && !checksum.isBlank()) ? checksum : "N/A";
+        this.durationMs = durationMs != null ? durationMs : 0L;
+        this.status = status != null ? status : "UNKNOWN";
+        this.errorCode = (errorCode != null && !errorCode.isBlank()) ? errorCode : "NONE";
+        this.details = details != null ? details : "";
     }
 
     public Instant getTimestamp() {

@@ -140,8 +140,7 @@ public class RouteOrchestrator {
 
         log.info("Starting execution: address=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
                 address, runId, route.getProcessingMode(), route.isAllowReprocessing());
-        auditService.recordEvent(runId, routeId, address,
-                "ROUTE_START", null, null, "STARTED", null,
+        audit(route, runId, "ROUTE_START", "-", "-", 0L, "N/A", 0L, "STARTED", "NONE",
                 "Sync initiated: " + address + " [ID: " + runId + "]");
 
         String effectivePattern = (patternOverride != null && !patternOverride.isBlank())
@@ -164,8 +163,7 @@ public class RouteOrchestrator {
             );
         } catch (Exception e) {
             log.error("File discovery failed for route [{}] on [{}]: {}", routeId, route.getSourceConnectionId(), e.getMessage());
-            auditService.recordEvent(runId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
-                    "DISCOVERY_FAILED", null, null, "FAILED", "DISCOVERY_ERROR", e.getMessage());
+            audit(route, runId, "DISCOVERY_FAILED", "-", "-", 0L, "N/A", 0L, "FAILED", "DISCOVERY_ERROR", e.getMessage());
             return new RouteExecutionResult(runId, routeId, false, 0, 0, 0, 0, startTime, Instant.now(),
                     "Discovery failed: " + e.getMessage(), List.of());
         }
@@ -223,17 +221,9 @@ public class RouteOrchestrator {
                     Instant lastAudit = duplicateAuditThrottle.get(auditThrottleKey);
                     if (lastAudit == null || lastAudit.isBefore(Instant.now().minusSeconds(60))) {
                         duplicateAuditThrottle.put(auditThrottleKey, Instant.now());
-                        auditService.recordEvent(
-                                itemRunId,
-                                routeId,
-                                address,
-                                "SKIPPED_DUPLICATE",
-                                remoteFile.getFilename(),
-                                null,
-                                "SKIPPED",
-                                null,
-                                "Duplicate file detected [" + remoteFile.getFilename() + "] (checksum matches previously transferred file). Zero re-transfer guarantee preserved."
-                        );
+                        audit(route, itemRunId, "SKIPPED_DUPLICATE", remoteFile.getFilename(), "-",
+                                remoteFile.getSize(), "N/A", 0L, "SKIPPED", "NONE",
+                                "Duplicate file detected [" + remoteFile.getFilename() + "] (checksum matches previously transferred file). Zero re-transfer guarantee preserved.");
                     }
                 }
             } catch (Exception e) {
@@ -245,8 +235,8 @@ public class RouteOrchestrator {
                 transferRun.setErrorCode(errorCode);
                 transferRun.setErrorMessage(e.getMessage());
                 statusService.registerRun(transferRun);
-                auditService.recordEvent(itemRunId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
-                        "FILE_TRANSFER_FAILED", remoteFile.getFilename(), null, "FAILED", errorCode, e.getMessage());
+                audit(route, itemRunId, "FILE_TRANSFER_FAILED", remoteFile.getFilename(), "-",
+                        remoteFile.getSize(), "N/A", 0L, "FAILED", errorCode, e.getMessage());
                 completedRuns.add(transferRun);
             }
         }
@@ -257,9 +247,9 @@ public class RouteOrchestrator {
                 address, discoveredFiles.size(), successCount, skippedCount, failureCount, runId);
 
         log.info(summary);
-        auditService.recordEvent(runId, routeId, address,
-                "ROUTE_COMPLETED", null, null,
-                overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", null, summary);
+        audit(route, runId, "ROUTE_COMPLETED", "-", "-", 0L, "N/A",
+                java.time.Duration.between(startTime, endTime).toMillis(),
+                overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", "NONE", summary);
 
         return new RouteExecutionResult(runId, routeId, overallSuccess, discoveredFiles.size(),
                 successCount, failureCount, skippedCount, startTime, endTime, summary, completedRuns);
@@ -340,23 +330,16 @@ public class RouteOrchestrator {
                     destFilename = compResult.destinationFilename();
                     checksum = compResult.compressedChecksum();
 
-                    auditService.recordEvent(
-                            transferRun.getRunId(),
-                            route.getRouteId(),
-                            resolveAddress(route),
-                            "FILE_COMPRESSED",
-                            remoteFile.getRemotePath(),
-                            destFilename,
-                            "COMPRESSED",
-                            null,
+                    audit(route, transferRun.getRunId(), "FILE_COMPRESSED",
+                            remoteFile.getRemotePath(), destFilename,
+                            compResult.compressedSize(), checksum, 0L, "COMPRESSED", "NONE",
                             String.format("Large file [%s] (%.2f MB) compressed to [%s] (%.2f MB, saved %.1f%%) [SHA-256: %s]",
                                     filename,
                                     compResult.originalSize() / (1024.0 * 1024.0),
                                     destFilename,
                                     compResult.compressedSize() / (1024.0 * 1024.0),
                                     compResult.reductionPercent(),
-                                    checksum)
-                    );
+                                    checksum));
                 } else {
                     RawCopyProcessor.RawCopyResult result = rawCopyProcessor.process(localDownloadPath, route.getChecksumAlgorithm());
                     outputFile = result.outputFile();
@@ -388,10 +371,9 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                String address = resolveAddress(route);
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), address,
-                        "TRANSFER_COMPLETED",
-                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
+                audit(route, transferRun.getRunId(), "TRANSFER_COMPLETED",
+                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(),
+                        pubResult.getBytesTransferred(), checksum, 0L, "COMPLETED", "NONE",
                         "Transferred " + pubResult.getBytesTransferred() + " bytes to " + pubResult.getFullRemotePath() + " [SHA-256: " + checksum + "]");
 
             } else if (route.getProcessingMode() == ProcessingMode.TRANSFORM) {
@@ -455,10 +437,9 @@ public class RouteOrchestrator {
 
                 idempotencyService.markCompleted(idempotencyKey, pubResult.getFullRemotePath());
 
-                String address = resolveAddress(route);
-                auditService.recordEvent(transferRun.getRunId(), route.getRouteId(), address,
-                        "TRANSFORMATION_COMPLETED",
-                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(), "COMPLETED", null,
+                audit(route, transferRun.getRunId(), "TRANSFORMATION_COMPLETED",
+                        remoteFile.getRemotePath(), pubResult.getFullRemotePath(),
+                        pubResult.getBytesTransferred(), result.outputChecksum(), 0L, "COMPLETED", "NONE",
                         String.format("Transformed %d records to %s [SHA-256: %s]",
                                 result.recordCount(), pubResult.getFullRemotePath(), result.outputChecksum()));
             } else {
@@ -496,6 +477,59 @@ public class RouteOrchestrator {
         return srcAddr + srcDir + " -> " + dstAddr + dstDir;
     }
 
+    private String resolveSourceAddress(RouteDefinition route) {
+        if (route == null) return "localhost:2022/upload";
+        String srcAddr = "localhost:2022";
+        if (connectionResolver != null) {
+            try {
+                com.mft.integration.connection.ConnectionDefinition src = connectionResolver.getConnection(route.getSourceConnectionId());
+                if (src != null) srcAddr = src.getHost() + ":" + src.getPort();
+            } catch (Exception ignored) {}
+        }
+        String srcDir = (route.getSourceDirectory() != null && !route.getSourceDirectory().isBlank()) ? route.getSourceDirectory() : "/upload";
+        return srcAddr + (srcDir.startsWith("/") ? srcDir : "/" + srcDir);
+    }
+
+    private String resolveDestinationAddress(RouteDefinition route) {
+        if (route == null) return "localhost:2222/incoming";
+        String dstAddr = "localhost:2222";
+        if (connectionResolver != null) {
+            try {
+                com.mft.integration.connection.ConnectionDefinition dst = connectionResolver.getConnection(route.getDestinationConnectionId());
+                if (dst != null) dstAddr = dst.getHost() + ":" + dst.getPort();
+            } catch (Exception ignored) {}
+        }
+        String dstDir = (route.getDestinationDirectory() != null && !route.getDestinationDirectory().isBlank()) ? route.getDestinationDirectory() : "/incoming";
+        return dstAddr + (dstDir.startsWith("/") ? dstDir : "/" + dstDir);
+    }
+
+    private void audit(RouteDefinition route, String runId, String operation,
+                       String sourceFile, String destinationFile, Long fileSize,
+                       String checksum, Long durationMs, String status,
+                       String errorCode, String details) {
+        String srcConn = route != null ? route.getSourceConnectionId() : "C_FILE_IN";
+        String dstConn = route != null ? route.getDestinationConnectionId() : "C_FILE_OUT";
+        String srcAddr = resolveSourceAddress(route);
+        String dstAddr = resolveDestinationAddress(route);
+        auditService.recordDetailedEvent(
+                runId,
+                route != null ? route.getRouteId() : "R_RAW_COPY",
+                srcConn,
+                dstConn,
+                srcAddr,
+                dstAddr,
+                operation,
+                sourceFile != null ? sourceFile : "-",
+                destinationFile != null ? destinationFile : "-",
+                fileSize != null ? fileSize : 0L,
+                checksum != null ? checksum : "N/A",
+                durationMs != null ? durationMs : 0L,
+                status != null ? status : "UNKNOWN",
+                errorCode != null ? errorCode : "NONE",
+                details != null ? details : ""
+        );
+    }
+
     private String generateRunId(String routeId) {
         String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(Instant.now().atZone(java.time.ZoneOffset.UTC));
         String shortUuid = UUID.randomUUID().toString().substring(0, 8);
@@ -510,7 +544,6 @@ public class RouteOrchestrator {
                                                       RemoteFileInfo remoteFile, Path localDownloadPath,
                                                       long actualSize, String sourceChecksum) {
         String filename = remoteFile.getFilename();
-        String address = resolveAddress(route);
 
         // 1. Immutable Local Workspace Archive Backup
         if (route.isArchiveSourceAfterTransfer()) {
@@ -524,24 +557,11 @@ public class RouteOrchestrator {
                 Files.copy(localDownloadPath, localArchivePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
                 log.info("Safe Post-Transfer: Archived local immutable backup for [{}] at [{}]", filename, localArchivePath);
-                auditService.recordDetailedEvent(
-                        transferRun.getRunId(),
-                        route.getRouteId(),
-                        route.getSourceConnectionId(),
-                        null,
-                        address,
-                        localArchivePath.toString(),
-                        "FILE_ARCHIVED_LOCAL",
-                        remoteFile.getRemotePath(),
-                        localArchivePath.toString(),
-                        actualSize,
-                        sourceChecksum,
-                        null,
-                        "ARCHIVED",
-                        null,
+                audit(route, transferRun.getRunId(), "FILE_ARCHIVED_LOCAL",
+                        remoteFile.getRemotePath(), localArchivePath.toString(),
+                        actualSize, sourceChecksum, 0L, "ARCHIVED", "NONE",
                         String.format("Safe backup preserved in local archive [%s] (Size: %d bytes, SHA-256: %s)",
-                                localArchivePath, actualSize, sourceChecksum)
-                );
+                                localArchivePath, actualSize, sourceChecksum));
             } catch (Exception e) {
                 log.warn("Failed to create local archive backup for [{}]: {}", filename, e.getMessage());
             }
@@ -560,24 +580,11 @@ public class RouteOrchestrator {
                     );
                     log.info("Safe Post-Transfer: Archived remote source file [{}] to [{}:{}]",
                             remoteFile.getRemotePath(), route.getSourceConnectionId(), remoteArchivePath);
-                    auditService.recordDetailedEvent(
-                            transferRun.getRunId(),
-                            route.getRouteId(),
-                            route.getSourceConnectionId(),
-                            route.getSourceConnectionId(),
-                            address,
-                            remoteArchivePath,
-                            "FILE_ARCHIVED_REMOTE",
-                            remoteFile.getRemotePath(),
-                            remoteArchivePath,
-                            actualSize,
-                            sourceChecksum,
-                            null,
-                            "ARCHIVED",
-                            null,
+                    audit(route, transferRun.getRunId(), "FILE_ARCHIVED_REMOTE",
+                            remoteFile.getRemotePath(), remoteArchivePath,
+                            actualSize, sourceChecksum, 0L, "ARCHIVED", "NONE",
                             String.format("Moved source file to remote archive [%s:%s]",
-                                    route.getSourceConnectionId(), remoteArchivePath)
-                    );
+                                    route.getSourceConnectionId(), remoteArchivePath));
                 } catch (Exception e) {
                     log.error("Failed to archive source file on remote server [{}:{}]: {}",
                             route.getSourceConnectionId(), remoteFile.getRemotePath(), e.getMessage());
@@ -595,24 +602,11 @@ public class RouteOrchestrator {
                     readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
                     log.info("Safe Post-Transfer: Deleted original source file [{}] on [{}] after verified delivery",
                             remoteFile.getRemotePath(), route.getSourceConnectionId());
-                    auditService.recordDetailedEvent(
-                            transferRun.getRunId(),
-                            route.getRouteId(),
-                            route.getSourceConnectionId(),
-                            null,
-                            address,
-                            null,
-                            "SOURCE_FILE_DELETED",
-                            remoteFile.getRemotePath(),
-                            null,
-                            actualSize,
-                            sourceChecksum,
-                            null,
-                            "DELETED",
-                            null,
+                    audit(route, transferRun.getRunId(), "SOURCE_FILE_DELETED",
+                            remoteFile.getRemotePath(), "-",
+                            actualSize, sourceChecksum, 0L, "DELETED", "NONE",
                             String.format("Source file [%s] removed from pickup folder on [%s] following verified destination receipt",
-                                    remoteFile.getRemotePath(), route.getSourceConnectionId())
-                    );
+                                    remoteFile.getRemotePath(), route.getSourceConnectionId()));
                 } catch (Exception e) {
                     log.error("Failed to delete source file after delivery [{}:{}]: {}",
                             route.getSourceConnectionId(), remoteFile.getRemotePath(), e.getMessage());
