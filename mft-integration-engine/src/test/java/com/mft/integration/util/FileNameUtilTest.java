@@ -16,7 +16,18 @@ class FileNameUtilTest {
             "TRADE_20261120.dat, TRADE_*.dat, true",
             "RECON_20261120.dat, TRADE_*.dat, false",
             "report.csv, *, true",
-            "anyfile.txt, '', true"
+            "anyfile.txt, '', true",
+            "report.pdf, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "REPORT.PDF, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "contract.docx, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "legacy.doc, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "sheet.xlsx, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "ledger.xls, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "data.exl, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "notes.txt, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, true",
+            "program.exe, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, false",
+            "archive.zip, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, false",
+            "script.sh, ^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$, false"
     })
     @DisplayName("Matches filename patterns accurately")
     void testPatternMatching(String filename, String pattern, boolean expected) {

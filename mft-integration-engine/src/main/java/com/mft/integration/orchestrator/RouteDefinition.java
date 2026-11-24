@@ -22,7 +22,7 @@ public class RouteDefinition {
     private ProcessingMode processingMode = ProcessingMode.RAW_COPY;
 
     private String sourceDirectory = "/";
-    private String sourcePattern = "*";
+    private String sourcePattern = "^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$";
     private String destinationDirectory = "/";
     private ChecksumAlgorithm checksumAlgorithm = ChecksumAlgorithm.SHA_256;
     private int retryLimit = 3;
@@ -30,6 +30,23 @@ public class RouteDefinition {
     private double retryMultiplier = 2.0;
     private boolean allowReprocessing = false;
     private boolean enabled = true;
+
+    /**
+     * Minimum allowed file size in bytes (default: 1024 bytes / 1 KB).
+     * Files below this size are rejected with an audit log.
+     */
+    private long minFileSize = 1024L;
+
+    /**
+     * Maximum standard file size threshold in bytes (default: 10 MB = 10,485,760 bytes).
+     * Files above this threshold are automatically compressed before transport.
+     */
+    private long maxStandardFileSize = 10L * 1024L * 1024L;
+
+    /**
+     * Whether files exceeding maxStandardFileSize should be automatically compressed.
+     */
+    private boolean compressLargeFiles = true;
 
     public RouteDefinition() {
     }
@@ -150,6 +167,30 @@ public class RouteDefinition {
         this.enabled = enabled;
     }
 
+    public long getMinFileSize() {
+        return minFileSize;
+    }
+
+    public void setMinFileSize(long minFileSize) {
+        this.minFileSize = minFileSize;
+    }
+
+    public long getMaxStandardFileSize() {
+        return maxStandardFileSize;
+    }
+
+    public void setMaxStandardFileSize(long maxStandardFileSize) {
+        this.maxStandardFileSize = maxStandardFileSize;
+    }
+
+    public boolean isCompressLargeFiles() {
+        return compressLargeFiles;
+    }
+
+    public void setCompressLargeFiles(boolean compressLargeFiles) {
+        this.compressLargeFiles = compressLargeFiles;
+    }
+
     @Override
     public String toString() {
         return "RouteDefinition{" +
@@ -159,6 +200,9 @@ public class RouteDefinition {
                 ", srcDir='" + sourceDirectory + '\'' +
                 ", pattern='" + sourcePattern + '\'' +
                 ", dstDir='" + destinationDirectory + '\'' +
+                ", minSize=" + minFileSize + "B" +
+                ", maxStdSize=" + maxStandardFileSize + "B" +
+                ", compressLargeFiles=" + compressLargeFiles +
                 ", retryLimit=" + retryLimit +
                 ", allowReprocessing=" + allowReprocessing +
                 ", enabled=" + enabled +

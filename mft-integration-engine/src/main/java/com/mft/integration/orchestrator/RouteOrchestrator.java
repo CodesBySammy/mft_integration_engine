@@ -6,7 +6,9 @@ import com.mft.integration.adapter.read.ReadAdapter;
 import com.mft.integration.adapter.write.WriteAdapter;
 import com.mft.integration.audit.AuditService;
 import com.mft.integration.checksum.ChecksumService;
+import com.mft.integration.compression.FileCompressionService;
 import com.mft.integration.exception.ConcurrencyLimitExceededException;
+import com.mft.integration.exception.FileProcessingException;
 import com.mft.integration.exception.MftException;
 import com.mft.integration.exception.RouteExecutionLockedException;
 import com.mft.integration.idempotency.IdempotencyKey;
@@ -49,6 +51,7 @@ public class RouteOrchestrator {
     private final WriteAdapter writeAdapter;
     private final RawCopyProcessor rawCopyProcessor;
     private final TransformationProcessor transformationProcessor;
+    private final FileCompressionService fileCompressionService;
     private final LocalWorkspaceService workspaceService;
     private final ChecksumService checksumService;
     private final IdempotencyService idempotencyService;
@@ -68,6 +71,7 @@ public class RouteOrchestrator {
                              WriteAdapter writeAdapter,
                              RawCopyProcessor rawCopyProcessor,
                              TransformationProcessor transformationProcessor,
+                             FileCompressionService fileCompressionService,
                              LocalWorkspaceService workspaceService,
                              ChecksumService checksumService,
                              IdempotencyService idempotencyService,
@@ -79,6 +83,7 @@ public class RouteOrchestrator {
         this.writeAdapter = writeAdapter;
         this.rawCopyProcessor = rawCopyProcessor;
         this.transformationProcessor = transformationProcessor;
+        this.fileCompressionService = fileCompressionService;
         this.workspaceService = workspaceService;
         this.checksumService = checksumService;
         this.idempotencyService = idempotencyService;
@@ -236,11 +241,12 @@ public class RouteOrchestrator {
                 failureCount++;
                 transferRun.setStatus(TransferStatus.FAILED);
                 transferRun.setEndTime(Instant.now());
-                transferRun.setErrorCode("TRANSFER_FAILED");
+                String errorCode = (e instanceof MftException me) ? me.getErrorCode() : "TRANSFER_FAILED";
+                transferRun.setErrorCode(errorCode);
                 transferRun.setErrorMessage(e.getMessage());
                 statusService.registerRun(transferRun);
                 auditService.recordEvent(itemRunId, routeId, route.getSourceConnectionId(), route.getDestinationConnectionId(),
-                        "FILE_TRANSFER_FAILED", remoteFile.getFilename(), null, "FAILED", "TRANSFER_FAILED", e.getMessage());
+                        "FILE_TRANSFER_FAILED", remoteFile.getFilename(), null, "FAILED", errorCode, e.getMessage());
                 completedRuns.add(transferRun);
             }
         }
@@ -281,6 +287,15 @@ public class RouteOrchestrator {
 
         // 2. Checksum and Idempotency verification
         long actualSize = Files.size(localDownloadPath);
+
+        // Enforce minimum file size constraint (default 1024 bytes / 1 KB)
+        if (actualSize < route.getMinFileSize()) {
+            String rejectMsg = String.format("File [%s] rejected: size %d bytes is below minimum allowed threshold (%d bytes / 1 KB).",
+                    filename, actualSize, route.getMinFileSize());
+            log.warn(rejectMsg);
+            throw new FileProcessingException("FILE_UNDERSIZED", rejectMsg);
+        }
+
         String sourceChecksum = checksumService.calculateChecksum(localDownloadPath, route.getChecksumAlgorithm());
         transferRun.setSourceChecksum(sourceChecksum);
         transferRun.setBytesTransferred(actualSize);
@@ -311,10 +326,46 @@ public class RouteOrchestrator {
             statusService.updateStatus(transferRun.getRunId(), TransferStatus.PROCESSING);
 
             if (route.getProcessingMode() == ProcessingMode.RAW_COPY) {
-                RawCopyProcessor.RawCopyResult result = rawCopyProcessor.process(localDownloadPath, route.getChecksumAlgorithm());
-                Path outputFile = result.outputFile();
-                String checksum = result.checksum();
+                Path outputFile;
+                String destFilename;
+                String checksum;
+
+                if (route.isCompressLargeFiles() && actualSize > route.getMaxStandardFileSize()) {
+                    FileCompressionService.CompressionResult compResult = fileCompressionService.compress(
+                            localDownloadPath,
+                            transferRun.getRunId(),
+                            route.getChecksumAlgorithm()
+                    );
+                    outputFile = compResult.compressedPath();
+                    destFilename = compResult.destinationFilename();
+                    checksum = compResult.compressedChecksum();
+
+                    auditService.recordEvent(
+                            transferRun.getRunId(),
+                            route.getRouteId(),
+                            resolveAddress(route),
+                            "FILE_COMPRESSED",
+                            remoteFile.getRemotePath(),
+                            destFilename,
+                            "COMPRESSED",
+                            null,
+                            String.format("Large file [%s] (%.2f MB) compressed to [%s] (%.2f MB, saved %.1f%%) [SHA-256: %s]",
+                                    filename,
+                                    compResult.originalSize() / (1024.0 * 1024.0),
+                                    destFilename,
+                                    compResult.compressedSize() / (1024.0 * 1024.0),
+                                    compResult.reductionPercent(),
+                                    checksum)
+                    );
+                } else {
+                    RawCopyProcessor.RawCopyResult result = rawCopyProcessor.process(localDownloadPath, route.getChecksumAlgorithm());
+                    outputFile = result.outputFile();
+                    destFilename = filename;
+                    checksum = result.checksum();
+                }
+
                 transferRun.setOutputChecksum(checksum);
+                transferRun.setDestinationFilename(destFilename);
 
                 // Publish output file with retry
                 TransferResult pubResult = retryManager.execute(
@@ -326,7 +377,7 @@ public class RouteOrchestrator {
                                 route.getDestinationConnectionId(),
                                 outputFile,
                                 route.getDestinationDirectory(),
-                                filename,
+                                destFilename,
                                 true
                         )
                 );

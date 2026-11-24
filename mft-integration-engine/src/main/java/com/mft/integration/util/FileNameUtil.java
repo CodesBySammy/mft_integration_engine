@@ -3,9 +3,11 @@ package com.mft.integration.util;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
+import java.util.regex.Pattern;
 
 /**
- * Utility for filename pattern matching using standard glob syntax (e.g. *.txt, TRADE_*.dat).
+ * Utility for filename pattern matching using standard regex or glob syntax.
+ * Supports patterns like "^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$", "*.txt", or "regex:...".
  */
 public final class FileNameUtil {
 
@@ -13,8 +15,8 @@ public final class FileNameUtil {
     }
 
     /**
-     * Matches a filename against a glob pattern.
-     * If pattern is null or blank, matches everything (*).
+     * Matches a filename against a regex or glob pattern.
+     * If pattern is null or blank, matches everything.
      */
     public static boolean matchesPattern(String filename, String pattern) {
         if (filename == null || filename.isBlank()) {
@@ -24,13 +26,33 @@ public final class FileNameUtil {
             return true;
         }
 
+        // 1. Explicit regex prefix: "regex:..."
+        if (pattern.startsWith("regex:")) {
+            try {
+                return Pattern.compile(pattern.substring(6)).matcher(filename).matches();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        // 2. Implicit regex detection (contains regex tokens like ^, $, |, (?i), (, ))
+        if (pattern.startsWith("^") || pattern.endsWith("$") || pattern.contains("|")
+                || pattern.contains("(?i)") || (pattern.contains("(") && pattern.contains(")"))) {
+            try {
+                return Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(filename).matches();
+            } catch (Exception ignored) {
+                // Fall back to glob
+            }
+        }
+
+        // 3. Standard Java NIO Glob matching
         try {
             PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
             return matcher.matches(Paths.get(filename));
         } catch (IllegalArgumentException e) {
-            // Fallback to simple regex conversion if glob syntax fails
+            // Fallback simple wildcard regex conversion
             String regex = pattern.replace(".", "\\.").replace("*", ".*").replace("?", ".");
-            return filename.matches(regex);
+            return Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher(filename).matches();
         }
     }
 

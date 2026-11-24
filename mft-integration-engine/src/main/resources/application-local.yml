@@ -42,11 +42,14 @@ mft:
       destination-connection-id: C_FILE_OUT
       processing-mode: RAW_COPY
       source-directory: /upload
-      source-pattern: "*.txt"
+      source-pattern: "^.*\\.(?i)(pdf|docx|doc|xlsx|xls|exl|txt)$"
       destination-directory: /incoming
       checksum-algorithm: SHA_256
       retry-limit: 3
       allow-reprocessing: false
+      min-file-size: 1024
+      max-standard-file-size: 10485760
+      compress-large-files: true
       enabled: true
 
     R_TRANSFORM:
