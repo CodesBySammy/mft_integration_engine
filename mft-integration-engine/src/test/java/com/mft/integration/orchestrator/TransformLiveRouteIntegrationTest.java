@@ -23,7 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("local")
-@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
+@org.springframework.test.context.TestPropertySource(properties = {
+        "mft.scheduling.enabled=false",
+        "mft.routes.R_TRANSFORM.delete-source-after-transfer=false",
+        "mft.routes.R_TRANSFORM.archive-source-after-transfer=false"
+})
 class TransformLiveRouteIntegrationTest {
 
     @Autowired
@@ -42,8 +46,24 @@ class TransformLiveRouteIntegrationTest {
     private IdempotencyRepository idempotencyRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         idempotencyRepository.clear();
+        String tradePayload = "TRD000000001USD000000000001500.5020261120\n" +
+                              "TRD000000002EUR000000000002800.7520261120\n" +
+                              "TRD000000003GBP000000000000950.0020261120\n" +
+                              "TRD000000004JPY000000000055000.0020261120\n";
+        for (Path uploadDir : List.of(
+                Path.of("D:\\mft\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\mft-enterprise-engine-windows-x64\\sftpgo\\instance-a\\data\\mft_source\\upload")
+        )) {
+            try {
+                Files.createDirectories(uploadDir);
+                Path datFile = uploadDir.resolve("trades.dat");
+                Files.writeString(datFile, tradePayload);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Test

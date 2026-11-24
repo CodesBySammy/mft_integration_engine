@@ -267,6 +267,21 @@ public class RouteOrchestrator {
         String filename = remoteFile.getFilename();
         Path localDownloadPath = workspaceService.resolvePath(WorkspaceDirectory.DOWNLOADS, filename);
 
+        // Pre-check: if file is already in quarantine, skip it immediately (belt+suspenders guard
+        // in case SFTP delete failed in a previous cycle and the file is still discoverable)
+        Path quarantineCheck = workspaceService.resolvePath(WorkspaceDirectory.QUARANTINE, filename);
+        if (Files.exists(quarantineCheck)) {
+            log.warn("Skipping [{}] — already in quarantine. Attempting SFTP cleanup retry.", filename);
+            try {
+                readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
+                log.info("Deferred SFTP cleanup succeeded for quarantined file [{}]", filename);
+            } catch (Exception ignored) {
+                log.debug("Deferred SFTP cleanup still failed for [{}]: {}", filename, ignored.getMessage());
+            }
+            transferRun.setStatus(TransferStatus.SKIPPED_DUPLICATE);
+            return false;
+        }
+
         // 1. Download with retry
         retryManager.execute(
                 "DOWNLOAD",
@@ -300,6 +315,19 @@ public class RouteOrchestrator {
                 } catch (Exception de) {
                     log.debug("Source delete during quarantine notice: {}", de.getMessage());
                 }
+                // Register in idempotency with a "QUARANTINE" checksum so the file is never
+                // re-downloaded even if the SFTP delete above failed (defensive belt+suspenders)
+                String quarantineChecksum = "QUARANTINE:" + filename + ":" + actualSize;
+                IdempotencyKey quarantineKey = new IdempotencyKey(
+                        route.getRouteId(),
+                        route.getSourceConnectionId(),
+                        remoteFile.getRemotePath(),
+                        actualSize,
+                        quarantineChecksum
+                );
+                idempotencyService.registerTransfer(quarantineKey, transferRun.getRunId());
+                log.debug("Quarantine idempotency guard registered for [{}]", filename);
+
                 audit(route, transferRun.getRunId(), "FILE_QUARANTINED", remoteFile.getRemotePath(), quarantinePath.toString(),
                         actualSize, "N/A", 0L, "QUARANTINED", "FILE_UNDERSIZED", rejectMsg);
             } catch (Exception qe) {

@@ -18,7 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("local")
-@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
+@org.springframework.test.context.TestPropertySource(properties = {
+        "mft.scheduling.enabled=false",
+        "mft.routes.R_RAW_COPY.delete-source-after-transfer=false",
+        "mft.routes.R_RAW_COPY.archive-source-after-transfer=false"
+})
 class IdempotencyAndRetryLiveIntegrationTest {
 
     @Autowired
@@ -38,8 +42,10 @@ class IdempotencyAndRetryLiveIntegrationTest {
     void testLiveIdempotencyLifecycle() throws IOException {
         String testFilename = "idempotency_test_" + System.currentTimeMillis() + ".txt";
         List<Path> candidateDirs = List.of(
+                Path.of("D:\\mft\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload"),
                 Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
-                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload")
+                Path.of("C:\\Users\\samee\\Downloads\\mft-enterprise-engine-windows-x64\\sftpgo\\instance-a\\data\\mft_source\\upload")
         );
         for (Path dir : candidateDirs) {
             try {

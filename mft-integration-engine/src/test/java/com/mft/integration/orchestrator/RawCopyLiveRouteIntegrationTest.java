@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,8 +46,22 @@ class RawCopyLiveRouteIntegrationTest {
     private IdempotencyRepository idempotencyRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         idempotencyRepository.clear();
+        for (Path uploadDir : List.of(
+                Path.of("D:\\mft\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\mft-enterprise-engine-windows-x64\\sftpgo\\instance-a\\data\\mft_source\\upload")
+        )) {
+            try {
+                Files.createDirectories(uploadDir);
+                Path pos = uploadDir.resolve("positions.txt");
+                if (!Files.exists(pos) || Files.size(pos) == 0) {
+                    Files.writeString(pos, "TRD000000001USD000000000001500.5020261120\n".repeat(30));
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     @Test

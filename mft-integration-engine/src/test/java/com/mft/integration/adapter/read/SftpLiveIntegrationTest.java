@@ -24,12 +24,20 @@ class SftpLiveIntegrationTest {
 
     @org.junit.jupiter.api.BeforeEach
     void ensurePositionsFile() throws IOException {
-        Path uploadDir = Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload");
-        if (Files.exists(uploadDir)) {
-            Path pos = uploadDir.resolve("positions.txt");
-            if (!Files.exists(pos) || Files.size(pos) == 0) {
-                Files.writeString(pos, "TRD000000001USD000000000001500.5020261120\n".repeat(30));
-            }
+        java.util.List<Path> uploadDirs = java.util.List.of(
+                Path.of("D:\\mft\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
+                Path.of("C:\\Users\\samee\\Downloads\\mft-enterprise-engine-windows-x64\\sftpgo\\instance-a\\data\\mft_source\\upload")
+        );
+        for (Path uploadDir : uploadDirs) {
+            try {
+                Files.createDirectories(uploadDir);
+                Path pos = uploadDir.resolve("positions.txt");
+                if (!Files.exists(pos) || Files.size(pos) == 0) {
+                    Files.writeString(pos, "TRD000000001USD000000000001500.5020261120\n".repeat(30));
+                }
+            } catch (Exception ignored) {}
         }
     }
 
