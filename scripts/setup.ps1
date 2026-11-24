@@ -210,6 +210,7 @@ Set-Content -Path (Join-Path $PSScriptRoot "paths.json") -Value ($pathsConfig | 
 # Copy web UI static / templates / openapi if available in bundle
 $bundleDir = Join-Path $RepoRoot "sftpgo-bundle"
 if (Test-Path $bundleDir) {
+    Copy-Item -Path (Join-Path $bundleDir "templates"), (Join-Path $bundleDir "static"), (Join-Path $bundleDir "openapi") -Destination $sftpgoDir -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item -Path (Join-Path $bundleDir "templates"), (Join-Path $bundleDir "static"), (Join-Path $bundleDir "openapi") -Destination $instAConfig -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item -Path (Join-Path $bundleDir "templates"), (Join-Path $bundleDir "static"), (Join-Path $bundleDir "openapi") -Destination $instBConfig -Recurse -Force -ErrorAction SilentlyContinue
 }

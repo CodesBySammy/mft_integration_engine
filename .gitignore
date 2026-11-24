@@ -27,6 +27,7 @@ release.properties
 **/sftpgo.log
 
 # SFTPGo Binary & Databases (SFTPGo binary is auto-downloaded by setup.bat)
+sftpgo/
 **/sftpgo.exe
 **/sftpgo.zip
 **/*.db

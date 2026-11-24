@@ -38,6 +38,7 @@ jobs:
           curl.exe -s -L -o "dist\sftpgo\sftpgo.zip" "https://github.com/drakkan/sftpgo/releases/download/v2.6.2/sftpgo_v2.6.2_windows_portable.zip"
           Expand-Archive -Path "dist\sftpgo\sftpgo.zip" -DestinationPath "dist\sftpgo" -Force
           Remove-Item "dist\sftpgo\sftpgo.zip" -Force -ErrorAction SilentlyContinue
+          Copy-Item -Path "sftpgo-bundle\templates", "sftpgo-bundle\static", "sftpgo-bundle\openapi" -Destination "dist\sftpgo\" -Recurse -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path "dist\*" -DestinationPath "mft-enterprise-engine-windows-x64.zip" -Force
 
       - name: Create GitHub Release
