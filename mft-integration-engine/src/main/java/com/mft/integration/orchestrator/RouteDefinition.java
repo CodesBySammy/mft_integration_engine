@@ -48,22 +48,6 @@ public class RouteDefinition {
      */
     private boolean compressLargeFiles = true;
 
-    /**
-     * Whether source file should be safely archived after confirmed destination delivery.
-     */
-    private boolean archiveSourceAfterTransfer = true;
-
-    /**
-     * Optional remote archive directory on source SFTP server (e.g. /archive).
-     * If blank, archival is safely stored in engine's local workspace/archive.
-     */
-    private String sourceArchiveDirectory = "";
-
-    /**
-     * Whether the source file should be deleted from the pickup directory after verified transfer.
-     */
-    private boolean deleteSourceAfterTransfer = true;
-
     public RouteDefinition() {
     }
 
@@ -207,30 +191,6 @@ public class RouteDefinition {
         this.compressLargeFiles = compressLargeFiles;
     }
 
-    public boolean isArchiveSourceAfterTransfer() {
-        return archiveSourceAfterTransfer;
-    }
-
-    public void setArchiveSourceAfterTransfer(boolean archiveSourceAfterTransfer) {
-        this.archiveSourceAfterTransfer = archiveSourceAfterTransfer;
-    }
-
-    public String getSourceArchiveDirectory() {
-        return sourceArchiveDirectory;
-    }
-
-    public void setSourceArchiveDirectory(String sourceArchiveDirectory) {
-        this.sourceArchiveDirectory = sourceArchiveDirectory;
-    }
-
-    public boolean isDeleteSourceAfterTransfer() {
-        return deleteSourceAfterTransfer;
-    }
-
-    public void setDeleteSourceAfterTransfer(boolean deleteSourceAfterTransfer) {
-        this.deleteSourceAfterTransfer = deleteSourceAfterTransfer;
-    }
-
     @Override
     public String toString() {
         return "RouteDefinition{" +
@@ -243,8 +203,6 @@ public class RouteDefinition {
                 ", minSize=" + minFileSize + "B" +
                 ", maxStdSize=" + maxStandardFileSize + "B" +
                 ", compressLargeFiles=" + compressLargeFiles +
-                ", archiveAfter=" + archiveSourceAfterTransfer +
-                ", deleteSource=" + deleteSourceAfterTransfer +
                 ", retryLimit=" + retryLimit +
                 ", allowReprocessing=" + allowReprocessing +
                 ", enabled=" + enabled +

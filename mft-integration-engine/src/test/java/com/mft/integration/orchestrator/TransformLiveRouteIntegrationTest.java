@@ -23,11 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("local")
-@org.springframework.test.context.TestPropertySource(properties = {
-        "mft.scheduling.enabled=false",
-        "mft.routes.R_TRANSFORM.delete-source-after-transfer=false",
-        "mft.routes.R_TRANSFORM.archive-source-after-transfer=false"
-})
+@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
 class TransformLiveRouteIntegrationTest {
 
     @Autowired

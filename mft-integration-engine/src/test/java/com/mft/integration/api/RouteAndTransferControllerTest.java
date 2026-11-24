@@ -31,6 +31,20 @@ class RouteAndTransferControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        for (java.nio.file.Path uploadDir : java.util.List.of(
+                java.nio.file.Path.of("D:\\mft\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                java.nio.file.Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload"),
+                java.nio.file.Path.of("C:\\Users\\samee\\Downloads\\inbound\\upload"),
+                java.nio.file.Path.of("C:\\Users\\samee\\Downloads\\mft-enterprise-engine-windows-x64\\sftpgo\\instance-a\\data\\mft_source\\upload")
+        )) {
+            try {
+                java.nio.file.Files.createDirectories(uploadDir);
+                java.nio.file.Path pos = uploadDir.resolve("positions.txt");
+                if (!java.nio.file.Files.exists(pos) || java.nio.file.Files.size(pos) == 0) {
+                    java.nio.file.Files.writeString(pos, "TRD000000001USD000000000001500.5020261120\n".repeat(30));
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     @Test

@@ -267,17 +267,10 @@ public class RouteOrchestrator {
         String filename = remoteFile.getFilename();
         Path localDownloadPath = workspaceService.resolvePath(WorkspaceDirectory.DOWNLOADS, filename);
 
-        // Pre-check: if file is already in quarantine, skip it immediately (belt+suspenders guard
-        // in case SFTP delete failed in a previous cycle and the file is still discoverable)
+        // Pre-check: if file is already in quarantine, skip it immediately
         Path quarantineCheck = workspaceService.resolvePath(WorkspaceDirectory.QUARANTINE, filename);
         if (Files.exists(quarantineCheck)) {
-            log.warn("Skipping [{}] — already in quarantine. Attempting SFTP cleanup retry.", filename);
-            try {
-                readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
-                log.info("Deferred SFTP cleanup succeeded for quarantined file [{}]", filename);
-            } catch (Exception ignored) {
-                log.debug("Deferred SFTP cleanup still failed for [{}]: {}", filename, ignored.getMessage());
-            }
+            log.debug("Skipping [{}] — already in quarantine.", filename);
             transferRun.setStatus(TransferStatus.SKIPPED_DUPLICATE);
             return false;
         }
@@ -308,15 +301,8 @@ public class RouteOrchestrator {
                 Path quarantinePath = workspaceService.resolvePath(WorkspaceDirectory.QUARANTINE, filename);
                 Files.createDirectories(quarantinePath.getParent());
                 Files.copy(localDownloadPath, quarantinePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                try {
-                    readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
-                    log.info("Poison pill isolated: Moved [{}] to quarantine [{}] and removed from pickup folder",
-                            filename, quarantinePath);
-                } catch (Exception de) {
-                    log.debug("Source delete during quarantine notice: {}", de.getMessage());
-                }
-                // Register in idempotency with a "QUARANTINE" checksum so the file is never
-                // re-downloaded even if the SFTP delete above failed (defensive belt+suspenders)
+
+                // Register in idempotency with a "QUARANTINE" checksum so the file is never re-downloaded
                 String quarantineChecksum = "QUARANTINE:" + filename + ":" + actualSize;
                 IdempotencyKey quarantineKey = new IdempotencyKey(
                         route.getRouteId(),
@@ -497,11 +483,6 @@ public class RouteOrchestrator {
                 throw new MftException("UNSUPPORTED_MODE", "Processing mode not supported: " + route.getProcessingMode());
             }
 
-            // Safe Post-Transfer Handshake: Archival and Source Cleanup
-            // Zero data loss & Zero race condition guarantee:
-            // Executed strictly after destination publication has been completely verified.
-            performPostTransferArchivalAndCleanup(route, transferRun, remoteFile, localDownloadPath, actualSize, sourceChecksum);
-
             return true;
         } catch (Exception e) {
             idempotencyService.markFailed(idempotencyKey, e.getMessage());
@@ -585,84 +566,5 @@ public class RouteOrchestrator {
         String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(Instant.now().atZone(java.time.ZoneOffset.UTC));
         String shortUuid = UUID.randomUUID().toString().substring(0, 8);
         return String.format("%s_%s_%s", routeId, timestamp, shortUuid);
-    }
-
-    /**
-     * Executes safe post-transfer archival and source deletion.
-     * Guarantees zero data loss: Only executed once destination publication has been confirmed.
-     */
-    private void performPostTransferArchivalAndCleanup(RouteDefinition route, TransferRun transferRun,
-                                                      RemoteFileInfo remoteFile, Path localDownloadPath,
-                                                      long actualSize, String sourceChecksum) {
-        String filename = remoteFile.getFilename();
-
-        // 1. Immutable Local Workspace Archive Backup
-        if (route.isArchiveSourceAfterTransfer()) {
-            try {
-                Path localArchivePath = workspaceService.resolvePath(
-                        WorkspaceDirectory.ARCHIVE,
-                        transferRun.getRunId(),
-                        filename
-                );
-                Files.createDirectories(localArchivePath.getParent());
-                Files.copy(localDownloadPath, localArchivePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-                log.info("Safe Post-Transfer: Archived local immutable backup for [{}] at [{}]", filename, localArchivePath);
-                audit(route, transferRun.getRunId(), "FILE_ARCHIVED_LOCAL",
-                        remoteFile.getRemotePath(), localArchivePath.toString(),
-                        actualSize, sourceChecksum, 0L, "ARCHIVED", "NONE",
-                        String.format("Safe backup preserved in local archive [%s] (Size: %d bytes, SHA-256: %s)",
-                                localArchivePath, actualSize, sourceChecksum));
-            } catch (Exception e) {
-                log.warn("Failed to create local archive backup for [{}]: {}", filename, e.getMessage());
-            }
-
-            // 2. Remote Source Server Archival (if sourceArchiveDirectory is configured, e.g. /archive)
-            if (route.getSourceArchiveDirectory() != null && !route.getSourceArchiveDirectory().isBlank()) {
-                try {
-                    String remoteArchivePath = com.mft.integration.util.PathValidationUtil.combineRemotePath(
-                            route.getSourceArchiveDirectory(),
-                            filename
-                    );
-                    readAdapter.moveFile(
-                            route.getSourceConnectionId(),
-                            remoteFile.getRemotePath(),
-                            remoteArchivePath
-                    );
-                    log.info("Safe Post-Transfer: Archived remote source file [{}] to [{}:{}]",
-                            remoteFile.getRemotePath(), route.getSourceConnectionId(), remoteArchivePath);
-                    audit(route, transferRun.getRunId(), "FILE_ARCHIVED_REMOTE",
-                            remoteFile.getRemotePath(), remoteArchivePath,
-                            actualSize, sourceChecksum, 0L, "ARCHIVED", "NONE",
-                            String.format("Moved source file to remote archive [%s:%s]",
-                                    route.getSourceConnectionId(), remoteArchivePath));
-                } catch (Exception e) {
-                    log.error("Failed to archive source file on remote server [{}:{}]: {}",
-                            route.getSourceConnectionId(), remoteFile.getRemotePath(), e.getMessage());
-                }
-            }
-        }
-
-        // 3. Source Pickup Deletion (if deleteSourceAfterTransfer is true AND it wasn't already moved to remote archive)
-        if (route.isDeleteSourceAfterTransfer()) {
-            boolean alreadyMoved = route.isArchiveSourceAfterTransfer()
-                    && route.getSourceArchiveDirectory() != null
-                    && !route.getSourceArchiveDirectory().isBlank();
-            if (!alreadyMoved) {
-                try {
-                    readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
-                    log.info("Safe Post-Transfer: Deleted original source file [{}] on [{}] after verified delivery",
-                            remoteFile.getRemotePath(), route.getSourceConnectionId());
-                    audit(route, transferRun.getRunId(), "SOURCE_FILE_DELETED",
-                            remoteFile.getRemotePath(), "-",
-                            actualSize, sourceChecksum, 0L, "DELETED", "NONE",
-                            String.format("Source file [%s] removed from pickup folder on [%s] following verified destination receipt",
-                                    remoteFile.getRemotePath(), route.getSourceConnectionId()));
-                } catch (Exception e) {
-                    log.error("Failed to delete source file after delivery [{}:{}]: {}",
-                            route.getSourceConnectionId(), remoteFile.getRemotePath(), e.getMessage());
-                }
-            }
-        }
     }
 }
