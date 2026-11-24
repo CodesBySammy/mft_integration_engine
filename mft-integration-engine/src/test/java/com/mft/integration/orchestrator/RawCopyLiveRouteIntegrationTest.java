@@ -22,7 +22,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("local")
-@org.springframework.test.context.TestPropertySource(properties = "mft.scheduling.enabled=false")
+@org.springframework.test.context.TestPropertySource(properties = {
+        "mft.scheduling.enabled=false",
+        "mft.routes.R_RAW_COPY.delete-source-after-transfer=false",
+        "mft.routes.R_RAW_COPY.archive-source-after-transfer=false"
+})
 class RawCopyLiveRouteIntegrationTest {
 
     @Autowired

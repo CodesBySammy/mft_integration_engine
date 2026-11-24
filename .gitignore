@@ -56,8 +56,11 @@ workspace/staging/*
 workspace/output/*
 workspace/quarantine/*
 workspace/status/*.json
+workspace/archive/*
+workspace/db/*
 !workspace/downloads/.gitkeep
 !workspace/staging/.gitkeep
 !workspace/output/.gitkeep
 !workspace/quarantine/.gitkeep
 !workspace/status/.gitkeep
+!workspace/archive/.gitkeep

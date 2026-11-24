@@ -50,6 +50,8 @@ mft:
       min-file-size: 1024
       max-standard-file-size: 10485760
       compress-large-files: true
+      archive-source-after-transfer: true
+      delete-source-after-transfer: true
       enabled: true
 
     R_TRANSFORM:

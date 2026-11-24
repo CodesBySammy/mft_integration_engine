@@ -44,7 +44,7 @@ class IdempotencyAndRetryLiveIntegrationTest {
         for (Path dir : candidateDirs) {
             try {
                 Files.createDirectories(dir);
-                Files.writeString(dir.resolve(testFilename), "IDEMPOTENT_TRANSACTION_PAYLOAD_1001\n");
+                Files.writeString(dir.resolve(testFilename), "IDEMPOTENT_TRANSACTION_PAYLOAD_1001\n".repeat(40));
             } catch (Exception ignored) {}
         }
 

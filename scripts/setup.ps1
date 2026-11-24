@@ -258,7 +258,7 @@ $seedUserAObj = @{
             username = "mft_source"
             password = "source_pass"
             status = 1
-            home_dir = $srcBaseDir
+            home_dir = (Resolve-Path $srcBaseDir).Path
             permissions = @{
                 "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
             }
@@ -282,7 +282,7 @@ $seedUserBObj = @{
             username = "mft_dest"
             password = "dest_pass"
             status = 1
-            home_dir = $dstBaseDir
+            home_dir = (Resolve-Path $dstBaseDir).Path
             permissions = @{
                 "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
             }
@@ -291,7 +291,7 @@ $seedUserBObj = @{
             username = "mft_destination"
             password = "dest_pass"
             status = 1
-            home_dir = $dstBaseDir
+            home_dir = (Resolve-Path $dstBaseDir).Path
             permissions = @{
                 "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
             }

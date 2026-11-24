@@ -12,17 +12,8 @@ if (Test-Path $pathsFile) {
     $src = $paths.source_folder
     $dst = $paths.destination_folder
 } else {
-    $src = if (Test-Path "D:\sftpgo\instance-a\data\mft_source\upload") {
-        "D:\sftpgo\instance-a\data\mft_source\upload"
-    } else {
-        Join-Path $RepoRoot "data\source\upload"
-    }
-
-    $dst = if (Test-Path "D:\sftpgo\instance-b\data\mft_destination\incoming") {
-        "D:\sftpgo\instance-b\data\mft_destination\incoming"
-    } else {
-        Join-Path $RepoRoot "data\destination\incoming"
-    }
+    $src = Join-Path $RepoRoot "sftpgo\instance-a\data\mft_source\upload"
+    $dst = Join-Path $RepoRoot "sftpgo\instance-b\data\mft_destination\incoming"
 }
 
 if (-not (Test-Path $src)) { New-Item -ItemType Directory -Path $src -Force | Out-Null }

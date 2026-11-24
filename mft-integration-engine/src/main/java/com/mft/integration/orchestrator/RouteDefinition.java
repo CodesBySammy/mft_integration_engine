@@ -32,10 +32,10 @@ public class RouteDefinition {
     private boolean enabled = true;
 
     /**
-     * Minimum allowed file size in bytes (default: 1024 bytes / 1 KB).
+     * Minimum allowed file size in bytes (default: 0 = no minimum).
      * Files below this size are rejected with an audit log.
      */
-    private long minFileSize = 1024L;
+    private long minFileSize = 0L;
 
     /**
      * Maximum standard file size threshold in bytes (default: 10 MB = 10,485,760 bytes).

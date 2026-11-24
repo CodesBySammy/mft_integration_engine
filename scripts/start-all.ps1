@@ -65,27 +65,99 @@ if (Test-Path $bundleDir) {
 
 $instAConfig = Join-Path $sftpgoDir "instance-a\config"
 $instBConfig = Join-Path $sftpgoDir "instance-b\config"
+$dataDirA = Join-Path $sftpgoDir "instance-a\data\mft_source"
+$uploadDirA = Join-Path $dataDirA "upload"
+$dataDirB = Join-Path $sftpgoDir "instance-b\data\mft_destination"
+$incomingDirB = Join-Path $dataDirB "incoming"
 
-# Fix database paths in sftpgo.json to match current machine dynamically
+# Ensure all directories exist
+New-Item -ItemType Directory -Path $instAConfig, $instBConfig, $uploadDirA, $incomingDirB -Force | Out-Null
+
+# Resolve canonical paths (dereferences any junctions cleanly)
+$canonicalDataDirA = (Resolve-Path $dataDirA).Path
+$canonicalDataDirB = (Resolve-Path $dataDirB).Path
+$canonicalSftpgoDir = (Resolve-Path $sftpgoDir).Path
+
+# Dynamically write portable users_seed.json for Source (mft_source + admin)
+$seedUserA = @{
+    users = @(
+        @{
+            username = "mft_source"
+            password = "source_pass"
+            status = 1
+            home_dir = $canonicalDataDirA
+            permissions = @{
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
+            }
+        }
+    )
+    admins = @(
+        @{
+            username = "sameermahindru69@gmail.com"
+            password = "Boobremon@69"
+            status = 1
+            permissions = @("*")
+        }
+    )
+}
+Set-Content -Path (Join-Path $instAConfig "users_seed.json") -Value ($seedUserA | ConvertTo-Json -Depth 5) -Force
+
+# Dynamically write portable users_seed.json for Destination (mft_dest + mft_destination + admin)
+$seedUserB = @{
+    users = @(
+        @{
+            username = "mft_dest"
+            password = "dest_pass"
+            status = 1
+            home_dir = $canonicalDataDirB
+            permissions = @{
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
+            }
+        },
+        @{
+            username = "mft_destination"
+            password = "dest_pass"
+            status = 1
+            home_dir = $canonicalDataDirB
+            permissions = @{
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
+            }
+        }
+    )
+    admins = @(
+        @{
+            username = "myselfsammy69@gmail.com"
+            password = "Boobremon@70"
+            status = 1
+            permissions = @("*")
+        }
+    )
+}
+Set-Content -Path (Join-Path $instBConfig "users_seed.json") -Value ($seedUserB | ConvertTo-Json -Depth 5) -Force
+
+# Dynamically set database paths in sftpgo.json to match current machine
 $configAFile = Join-Path $instAConfig "sftpgo.json"
 if (Test-Path $configAFile) {
     $cfgA = Get-Content $configAFile -Raw | ConvertFrom-Json
-    $targetDbA = Join-Path $sftpgoDir "instance-a\sftpgo.db"
-    if ($cfgA.data_provider.name -ne $targetDbA) {
-        $cfgA.data_provider.name = $targetDbA
-        Set-Content -Path $configAFile -Value ($cfgA | ConvertTo-Json -Depth 5) -Force
-    }
+    $targetDbA = Join-Path $canonicalSftpgoDir "instance-a\sftpgo.db"
+    $cfgA.data_provider.name = $targetDbA
+    Set-Content -Path $configAFile -Value ($cfgA | ConvertTo-Json -Depth 5) -Force
 }
 
 $configBFile = Join-Path $instBConfig "sftpgo.json"
 if (Test-Path $configBFile) {
     $cfgB = Get-Content $configBFile -Raw | ConvertFrom-Json
-    $targetDbB = Join-Path $sftpgoDir "instance-b\sftpgo.db"
-    if ($cfgB.data_provider.name -ne $targetDbB) {
-        $cfgB.data_provider.name = $targetDbB
-        Set-Content -Path $configBFile -Value ($cfgB | ConvertTo-Json -Depth 5) -Force
-    }
+    $targetDbB = Join-Path $canonicalSftpgoDir "instance-b\sftpgo.db"
+    $cfgB.data_provider.name = $targetDbB
+    Set-Content -Path $configBFile -Value ($cfgB | ConvertTo-Json -Depth 5) -Force
 }
+
+# Update paths.json
+$pathsConfig = @{
+    source_folder = (Resolve-Path $uploadDirA).Path
+    destination_folder = (Resolve-Path $incomingDirB).Path
+}
+Set-Content -Path (Join-Path $PSScriptRoot "paths.json") -Value ($pathsConfig | ConvertTo-Json -Depth 2) -Force
 
 $engineDir = Join-Path $RepoRoot "mft-integration-engine"
 $jarPath = Join-Path $RepoRoot "bin\mft-integration-engine-0.0.1-SNAPSHOT.jar"

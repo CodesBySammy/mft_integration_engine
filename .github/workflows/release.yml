@@ -30,9 +30,9 @@ jobs:
 
       - name: Assemble Standalone Portable Distribution
         run: |
-          New-Item -ItemType Directory -Path "dist\bin", "dist\workspace\downloads", "dist\workspace\staging", "dist\workspace\quarantine", "dist\workspace\status", "dist\sftpgo" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist\bin", "dist\workspace\downloads", "dist\workspace\staging", "dist\workspace\quarantine", "dist\workspace\status", "dist\workspace\archive", "dist\sftpgo" -Force | Out-Null
           Copy-Item -Path "mft-integration-engine\target\mft-integration-engine-0.0.1-SNAPSHOT.jar" -Destination "dist\bin\" -Force
-          Copy-Item -Path "setup.bat", "start-all.bat", "stop-all.bat", "README.md", ".gitignore" -Destination "dist\" -Force
+          Copy-Item -Path "setup.bat", "start-all.bat", "stop-all.bat", "open-folders.bat", "README.md", ".gitignore" -Destination "dist\" -Force
           Copy-Item -Path "scripts" -Destination "dist\" -Recurse -Force
           Copy-Item -Path "sftpgo-bundle" -Destination "dist\" -Recurse -Force
           curl.exe -s -L -o "dist\sftpgo\sftpgo.zip" "https://github.com/drakkan/sftpgo/releases/download/v2.6.2/sftpgo_v2.6.2_windows_portable.zip"

@@ -22,6 +22,17 @@ class SftpLiveIntegrationTest {
     @Autowired
     private ReadAdapter readAdapter;
 
+    @org.junit.jupiter.api.BeforeEach
+    void ensurePositionsFile() throws IOException {
+        Path uploadDir = Path.of("D:\\sftpgo\\instance-a\\data\\mft_source\\upload");
+        if (Files.exists(uploadDir)) {
+            Path pos = uploadDir.resolve("positions.txt");
+            if (!Files.exists(pos) || Files.size(pos) == 0) {
+                Files.writeString(pos, "TRD000000001USD000000000001500.5020261120\n".repeat(30));
+            }
+        }
+    }
+
     @Test
     @DisplayName("Live test: Test connection to Source SFTPGo (Server A on port 2022)")
     void testLiveSourceConnection() {
