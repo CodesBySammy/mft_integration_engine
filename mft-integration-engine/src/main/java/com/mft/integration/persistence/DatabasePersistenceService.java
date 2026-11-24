@@ -221,4 +221,22 @@ public class DatabasePersistenceService {
         }
         return status;
     }
+
+    public java.util.List<Map<String, Object>> queryAuditEvents(int limit) {
+        if (jdbcTemplate == null) return java.util.List.of();
+        int safeLimit = Math.min(Math.max(1, limit), 1000);
+        return jdbcTemplate.queryForList("SELECT * FROM mft_audit_events ORDER BY id DESC LIMIT ?", safeLimit);
+    }
+
+    public java.util.List<Map<String, Object>> queryTransferRuns(int limit) {
+        if (jdbcTemplate == null) return java.util.List.of();
+        int safeLimit = Math.min(Math.max(1, limit), 1000);
+        return jdbcTemplate.queryForList("SELECT * FROM mft_transfer_runs ORDER BY start_time DESC LIMIT ?", safeLimit);
+    }
+
+    public java.util.List<Map<String, Object>> queryIdempotencyRecords(int limit) {
+        if (jdbcTemplate == null) return java.util.List.of();
+        int safeLimit = Math.min(Math.max(1, limit), 1000);
+        return jdbcTemplate.queryForList("SELECT * FROM mft_idempotency_records ORDER BY first_processed_at DESC LIMIT ?", safeLimit);
+    }
 }
