@@ -27,6 +27,9 @@ public class HealthController {
     private final RouteRegistry routeRegistry;
     private final LocalWorkspaceService workspaceService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.mft.integration.persistence.DatabasePersistenceService databasePersistenceService;
+
     public HealthController(ConnectionRegistry connectionRegistry,
                             RouteRegistry routeRegistry,
                             LocalWorkspaceService workspaceService) {
@@ -35,7 +38,7 @@ public class HealthController {
         this.workspaceService = workspaceService;
     }
 
-    @Operation(summary = "Engine health check", description = "Returns active system status, count of configured connections, registered routes, and workspace readiness.")
+    @Operation(summary = "Engine health check", description = "Returns active system status, count of configured connections, registered routes, workspace readiness, and relational database status.")
     @GetMapping
     public ResponseEntity<ApiResponse<HealthCheckDto>> getHealth() {
         int connCount = connectionRegistry.getAllConnections().size();
@@ -46,6 +49,9 @@ public class HealthController {
         details.put("workspaceRoot", workspaceService.getWorkspaceRoot().toString());
         details.put("configuredConnections", connCount);
         details.put("configuredRoutes", routeCount);
+        if (databasePersistenceService != null) {
+            details.put("database", databasePersistenceService.getDatabaseStatus());
+        }
         details.put("status", "UP");
 
         HealthCheckDto health = new HealthCheckDto(
@@ -58,5 +64,14 @@ public class HealthController {
         );
 
         return ResponseEntity.ok(ApiResponse.ok("System healthy", health));
+    }
+
+    @Operation(summary = "Relational database status", description = "Inspects live relational database connectivity (H2/MySQL), driver info, and table row counts.")
+    @GetMapping("/database")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDatabaseStatus() {
+        if (databasePersistenceService != null) {
+            return ResponseEntity.ok(ApiResponse.ok(databasePersistenceService.getDatabaseStatus()));
+        }
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("databaseConnected", false, "mode", "FILE_ONLY")));
     }
 }

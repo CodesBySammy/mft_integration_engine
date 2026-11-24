@@ -36,6 +36,9 @@ public class InMemoryIdempotencyRepository implements IdempotencyRepository {
     private final LocalWorkspaceService workspaceService;
     private final ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private com.mft.integration.persistence.DatabasePersistenceService databasePersistenceService;
+
     public InMemoryIdempotencyRepository() {
         this(null);
     }
@@ -119,6 +122,9 @@ public class InMemoryIdempotencyRepository implements IdempotencyRepository {
         }
         records.put(record.getKey(), record);
         persistToDisk();
+        if (databasePersistenceService != null) {
+            databasePersistenceService.saveIdempotencyRecord(record);
+        }
         return record;
     }
 

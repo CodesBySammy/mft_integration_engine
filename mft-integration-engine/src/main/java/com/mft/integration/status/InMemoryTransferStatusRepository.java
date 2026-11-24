@@ -34,6 +34,9 @@ public class InMemoryTransferStatusRepository implements TransferStatusRepositor
     private final LocalWorkspaceService workspaceService;
     private final ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private com.mft.integration.persistence.DatabasePersistenceService databasePersistenceService;
+
     public InMemoryTransferStatusRepository() {
         this(null);
     }
@@ -70,6 +73,9 @@ public class InMemoryTransferStatusRepository implements TransferStatusRepositor
         }
         runs.put(run.getRunId(), run);
         persistToDisk();
+        if (databasePersistenceService != null) {
+            databasePersistenceService.saveTransferRun(run);
+        }
         return run;
     }
 

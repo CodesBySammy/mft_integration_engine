@@ -18,9 +18,14 @@ public class AuditEvent {
     private String connectionId;
     private String sourceConnectionId;
     private String destinationConnectionId;
+    private String sourceAddress;
+    private String destinationAddress;
     private String operation;
     private String sourceFile;
     private String destinationFile;
+    private Long fileSize;
+    private String checksum;
+    private Long durationMs;
     private String status;
     private String errorCode;
     private String details;
@@ -45,6 +50,14 @@ public class AuditEvent {
                 operation, sourceFile, destinationFile, status, errorCode, details);
     }
 
+    public AuditEvent(Instant timestamp, String runId, String routeId, String connectionId,
+                      String sourceConnectionId, String destinationConnectionId,
+                      String operation, String sourceFile, String destinationFile,
+                      String status, String errorCode, String details) {
+        this(timestamp, runId, routeId, connectionId, sourceConnectionId, destinationConnectionId,
+                null, null, operation, sourceFile, destinationFile, null, null, null, status, errorCode, details);
+    }
+
     @JsonCreator
     public AuditEvent(@JsonProperty("timestamp") Instant timestamp,
                       @JsonProperty("runId") String runId,
@@ -52,9 +65,14 @@ public class AuditEvent {
                       @JsonProperty("connectionId") String connectionId,
                       @JsonProperty("sourceConnectionId") String sourceConnectionId,
                       @JsonProperty("destinationConnectionId") String destinationConnectionId,
+                      @JsonProperty("sourceAddress") String sourceAddress,
+                      @JsonProperty("destinationAddress") String destinationAddress,
                       @JsonProperty("operation") String operation,
                       @JsonProperty("sourceFile") String sourceFile,
                       @JsonProperty("destinationFile") String destinationFile,
+                      @JsonProperty("fileSize") Long fileSize,
+                      @JsonProperty("checksum") String checksum,
+                      @JsonProperty("durationMs") Long durationMs,
                       @JsonProperty("status") String status,
                       @JsonProperty("errorCode") String errorCode,
                       @JsonProperty("details") String details) {
@@ -63,6 +81,8 @@ public class AuditEvent {
         this.routeId = routeId;
         this.sourceConnectionId = sourceConnectionId;
         this.destinationConnectionId = destinationConnectionId;
+        this.sourceAddress = sourceAddress;
+        this.destinationAddress = destinationAddress;
         this.connectionId = connectionId != null ? connectionId :
                 (sourceConnectionId != null && destinationConnectionId != null
                         ? sourceConnectionId + " -> " + destinationConnectionId
@@ -70,6 +90,9 @@ public class AuditEvent {
         this.operation = operation;
         this.sourceFile = sourceFile;
         this.destinationFile = destinationFile;
+        this.fileSize = fileSize;
+        this.checksum = checksum;
+        this.durationMs = durationMs;
         this.status = status;
         this.errorCode = errorCode;
         this.details = details;
@@ -169,6 +192,46 @@ public class AuditEvent {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public String getSourceAddress() {
+        return sourceAddress;
+    }
+
+    public void setSourceAddress(String sourceAddress) {
+        this.sourceAddress = sourceAddress;
+    }
+
+    public String getDestinationAddress() {
+        return destinationAddress;
+    }
+
+    public void setDestinationAddress(String destinationAddress) {
+        this.destinationAddress = destinationAddress;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
+
+    public String getChecksum() {
+        return checksum;
+    }
+
+    public void setChecksum(String checksum) {
+        this.checksum = checksum;
+    }
+
+    public Long getDurationMs() {
+        return durationMs;
+    }
+
+    public void setDurationMs(Long durationMs) {
+        this.durationMs = durationMs;
     }
 
     @Override

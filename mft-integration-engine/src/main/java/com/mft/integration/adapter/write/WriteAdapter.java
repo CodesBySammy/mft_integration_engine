@@ -48,4 +48,9 @@ public interface WriteAdapter {
      * @return structured transfer result
      */
     TransferResult publishFile(String connectionId, Path localFilePath, String remoteDirectory, String targetFilename, boolean overwrite);
+
+    /**
+     * Deletes a remote file from a destination connection.
+     */
+    void deleteRemoteFile(String connectionId, String remoteFilePath);
 }

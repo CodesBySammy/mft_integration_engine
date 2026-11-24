@@ -15,9 +15,14 @@ public class AuditEventDto {
     private final String connectionId;
     private final String sourceConnectionId;
     private final String destinationConnectionId;
+    private final String sourceAddress;
+    private final String destinationAddress;
     private final String operation;
     private final String sourceFile;
     private final String destinationFile;
+    private final Long fileSize;
+    private final String checksum;
+    private final Long durationMs;
     private final String status;
     private final String errorCode;
     private final String details;
@@ -29,9 +34,14 @@ public class AuditEventDto {
         this.connectionId = event.getConnectionId();
         this.sourceConnectionId = event.getSourceConnectionId();
         this.destinationConnectionId = event.getDestinationConnectionId();
+        this.sourceAddress = event.getSourceAddress();
+        this.destinationAddress = event.getDestinationAddress();
         this.operation = event.getOperation();
         this.sourceFile = event.getSourceFile();
         this.destinationFile = event.getDestinationFile();
+        this.fileSize = event.getFileSize();
+        this.checksum = event.getChecksum();
+        this.durationMs = event.getDurationMs();
         this.status = event.getStatus();
         this.errorCode = event.getErrorCode();
         this.details = event.getDetails();
@@ -83,5 +93,25 @@ public class AuditEventDto {
 
     public String getDetails() {
         return details;
+    }
+
+    public String getSourceAddress() {
+        return sourceAddress;
+    }
+
+    public String getDestinationAddress() {
+        return destinationAddress;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public String getChecksum() {
+        return checksum;
+    }
+
+    public Long getDurationMs() {
+        return durationMs;
     }
 }

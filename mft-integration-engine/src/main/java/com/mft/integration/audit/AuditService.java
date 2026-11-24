@@ -29,9 +29,22 @@ public class AuditService {
                 operation, sourceFile, destinationFile, status, errorCode, details);
         auditRepository.save(event);
 
-        log.info("AUDIT: runId=[{}] routeId=[{}] conn=[{}] op=[{}] src=[{}] dst=[{}] status=[{}] err=[{}]",
-                runId, routeId, connectionId, operation, sourceFile, destinationFile,
-                status, errorCode != null ? errorCode : "NONE");
+        logAudit(event);
+    }
+
+    public void recordDetailedEvent(String runId, String routeId, String sourceConn, String destConn,
+                                   String sourceAddr, String destAddr, String operation,
+                                   String sourceFile, String destinationFile, Long fileSize,
+                                   String checksum, Long durationMs, String status,
+                                   String errorCode, String details) {
+        AuditEvent event = new AuditEvent(
+                java.time.Instant.now(), runId, routeId,
+                (sourceConn != null && destConn != null) ? sourceConn + " -> " + destConn : (sourceConn != null ? sourceConn : destConn),
+                sourceConn, destConn, sourceAddr, destAddr, operation, sourceFile, destinationFile,
+                fileSize, checksum, durationMs, status, errorCode, details
+        );
+        auditRepository.save(event);
+        logAudit(event);
     }
 
     public void recordEvent(String runId, String routeId, String sourceConnectionId, String destinationConnectionId,
@@ -41,9 +54,26 @@ public class AuditService {
                 operation, sourceFile, destinationFile, status, errorCode, details);
         auditRepository.save(event);
 
-        log.info("AUDIT: runId=[{}] routeId=[{}] conn=[{}] op=[{}] src=[{}] dst=[{}] status=[{}] err=[{}]",
-                runId, routeId, event.getConnectionId(), operation, sourceFile, destinationFile,
-                status, errorCode != null ? errorCode : "NONE");
+        logAudit(event);
+    }
+
+    private void logAudit(AuditEvent event) {
+        String err = event.getErrorCode() != null ? event.getErrorCode() : "NONE";
+        String sizeStr = event.getFileSize() != null ? event.getFileSize() + " B" : "N/A";
+        String chk = event.getChecksum() != null ? event.getChecksum().substring(0, Math.min(12, event.getChecksum().length())) + "..." : "N/A";
+
+        log.info("[AUDIT EVENT] [{}] runId=[{}] route=[{}] conn=[{}] src=[{}] dst=[{}] size=[{}] sha256=[{}] status=[{}] err=[{}] details=[{}]",
+                event.getOperation(),
+                event.getRunId(),
+                event.getRouteId(),
+                event.getConnectionId(),
+                event.getSourceFile() != null ? event.getSourceFile() : "-",
+                event.getDestinationFile() != null ? event.getDestinationFile() : "-",
+                sizeStr,
+                chk,
+                event.getStatus(),
+                err,
+                event.getDetails() != null ? event.getDetails() : "");
     }
 
     public void recordEvent(String runId, String routeId, String operation,

@@ -171,6 +171,21 @@ public class SftpWriteAdapter implements WriteAdapter {
         }
     }
 
+    @Override
+    public void deleteRemoteFile(String connectionId, String remoteFilePath) {
+        String normalized = PathValidationUtil.validateAndNormalizeRemotePath(remoteFilePath);
+        log.info("Deleting remote destination file on [{}]: [{}]", connectionId, normalized);
+        try (Session<SftpClient.DirEntry> session = openSession(connectionId)) {
+            if (session.exists(normalized)) {
+                session.remove(normalized);
+                log.info("Successfully deleted remote file on [{}]: [{}]", connectionId, normalized);
+            }
+        } catch (IOException e) {
+            log.error("Failed to delete remote file on [{}] for [{}]: {}", connectionId, normalized, e.getMessage());
+            throw new SftpConnectionException(connectionId, "Failed to delete file: " + normalized, e);
+        }
+    }
+
     private Session<SftpClient.DirEntry> openSession(String connectionId) {
         try {
             return sessionFactoryRegistry.getSessionFactory(connectionId).getSession();

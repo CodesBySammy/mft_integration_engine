@@ -52,4 +52,14 @@ public interface ReadAdapter {
      * @return true if connection succeeds
      */
     boolean testConnection(String connectionId);
+
+    /**
+     * Deletes a file on the remote source server after successful verified transfer.
+     */
+    void deleteFile(String connectionId, String remoteFilePath);
+
+    /**
+     * Atomically moves or archives a file on the remote source server.
+     */
+    void moveFile(String connectionId, String sourcePath, String destinationPath);
 }

@@ -133,6 +133,9 @@ class RouteOrchestratorTest {
         assertThat(result.getItemRuns().get(0).getOutputChecksum()).isNotBlank();
 
         verify(writeAdapter).publishFile(eq("C_FILE_OUT"), any(Path.class), eq("/incoming"), eq("trades.txt"), eq(true));
+        verify(readAdapter).deleteFile(eq("C_FILE_IN"), eq("/upload/trades.txt"));
+        assertThat(auditService.getAllEvents().stream().anyMatch(e -> "FILE_ARCHIVED_LOCAL".equals(e.getOperation()))).isTrue();
+        assertThat(auditService.getAllEvents().stream().anyMatch(e -> "SOURCE_FILE_DELETED".equals(e.getOperation()))).isTrue();
         assertThat(auditService.getAllEvents()).isNotEmpty();
     }
 

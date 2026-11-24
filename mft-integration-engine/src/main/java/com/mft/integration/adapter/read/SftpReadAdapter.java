@@ -187,6 +187,54 @@ public class SftpReadAdapter implements ReadAdapter {
         }
     }
 
+    @Override
+    public void deleteFile(String connectionId, String remoteFilePath) {
+        String normalized = PathValidationUtil.validateAndNormalizeRemotePath(remoteFilePath);
+        log.info("Deleting remote source file on [{}]: [{}]", connectionId, normalized);
+        try (Session<SftpClient.DirEntry> session = openSession(connectionId)) {
+            if (session.exists(normalized)) {
+                session.remove(normalized);
+                log.info("Successfully deleted remote source file on [{}]: [{}]", connectionId, normalized);
+            } else {
+                log.warn("Remote source file to delete does not exist on [{}]: [{}]", connectionId, normalized);
+            }
+        } catch (IOException e) {
+            log.error("Failed to delete remote file on [{}] for [{}]: {}", connectionId, normalized, e.getMessage());
+            throw new SftpConnectionException(connectionId, "Failed to delete file: " + normalized, e);
+        }
+    }
+
+    @Override
+    public void moveFile(String connectionId, String sourcePath, String destinationPath) {
+        String normSource = PathValidationUtil.validateAndNormalizeRemotePath(sourcePath);
+        String normDest = PathValidationUtil.validateAndNormalizeRemotePath(destinationPath);
+        log.info("Archiving remote source file on [{}]: [{}] -> [{}]", connectionId, normSource, normDest);
+        try (Session<SftpClient.DirEntry> session = openSession(connectionId)) {
+            if (!session.exists(normSource)) {
+                throw new MftException("REMOTE_SOURCE_NOT_FOUND", "Source file to archive does not exist: " + normSource);
+            }
+            int lastSlash = normDest.lastIndexOf('/');
+            if (lastSlash > 0) {
+                String parent = normDest.substring(0, lastSlash);
+                if (!session.exists(parent)) {
+                    for (String part : parent.split("/")) {
+                        if (part.isBlank()) continue;
+                        String sub = "/" + part;
+                        if (!session.exists(sub)) session.mkdir(sub);
+                    }
+                }
+            }
+            if (session.exists(normDest)) {
+                session.remove(normDest);
+            }
+            session.rename(normSource, normDest);
+            log.info("Successfully archived remote source file on [{}]: [{}] -> [{}]", connectionId, normSource, normDest);
+        } catch (IOException e) {
+            log.error("Failed to archive remote file on [{}] from [{}] to [{}]: {}", connectionId, normSource, normDest, e.getMessage());
+            throw new SftpConnectionException(connectionId, "Failed to archive file from " + normSource + " to " + normDest, e);
+        }
+    }
+
     private Session<SftpClient.DirEntry> openSession(String connectionId) {
         try {
             return sessionFactoryRegistry.getSessionFactory(connectionId).getSession();

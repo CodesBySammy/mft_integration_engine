@@ -1,0 +1,16 @@
+# ==============================================================================
+# MySQL Profile: Enterprise Relational Database Logging & Status Storage
+# ==============================================================================
+# Activate with: java -jar mft-integration-engine.jar --spring.profiles.active=mysql,local
+# Requires a running MySQL server instance (e.g. localhost:3306).
+# Tables are automatically created from schema.sql on first startup.
+
+spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:mft_database}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
+  sql:
+    init:
+      mode: always

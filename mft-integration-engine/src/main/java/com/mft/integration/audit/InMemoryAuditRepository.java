@@ -31,6 +31,9 @@ public class InMemoryAuditRepository implements AuditRepository {
     private final LocalWorkspaceService workspaceService;
     private final ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private com.mft.integration.persistence.DatabasePersistenceService databasePersistenceService;
+
     public InMemoryAuditRepository() {
         this(null);
     }
@@ -63,6 +66,9 @@ public class InMemoryAuditRepository implements AuditRepository {
         }
         events.add(event);
         persistToDisk();
+        if (databasePersistenceService != null) {
+            databasePersistenceService.saveAuditEvent(event);
+        }
         return event;
     }
 
