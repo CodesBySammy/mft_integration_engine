@@ -260,14 +260,14 @@ $seedUserAObj = @{
             status = 1
             home_dir = $srcBaseDir
             permissions = @{
-                "/" = @("list", "download", "delete")
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
             }
         }
     )
     admins = @(
         @{
-            username = "admin"
-            password = "Admin1234!"
+            username = "sameermahindru69@gmail.com"
+            password = "Boobremon@69"
             status = 1
             permissions = @("*")
         }
@@ -275,9 +275,18 @@ $seedUserAObj = @{
 }
 Set-Content -Path (Join-Path $instAConfig "users_seed.json") -Value ($seedUserAObj | ConvertTo-Json -Depth 5) -Force
 
-# Write users_seed.json for Destination (mft_destination + admin)
+# Write users_seed.json for Destination (mft_dest + mft_destination + admin)
 $seedUserBObj = @{
     users = @(
+        @{
+            username = "mft_dest"
+            password = "dest_pass"
+            status = 1
+            home_dir = $dstBaseDir
+            permissions = @{
+                "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
+            }
+        },
         @{
             username = "mft_destination"
             password = "dest_pass"
@@ -290,8 +299,8 @@ $seedUserBObj = @{
     )
     admins = @(
         @{
-            username = "admin"
-            password = "Admin1234!"
+            username = "myselfsammy69@gmail.com"
+            password = "Boobremon@70"
             status = 1
             permissions = @("*")
         }

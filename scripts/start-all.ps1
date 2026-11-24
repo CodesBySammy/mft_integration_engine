@@ -117,8 +117,10 @@ Write-Host "`n============================================================" -For
 Write-Host " All MFT Services are LIVE!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "  MFT Dashboard      : http://localhost:8080" -ForegroundColor Cyan
-Write-Host "  Source SFTP Web    : http://localhost:9080/web/client (mft_source / source_pass)" -ForegroundColor White
-Write-Host "  Dest SFTP Web      : http://localhost:9081/web/client (mft_destination / dest_pass)" -ForegroundColor White
+Write-Host "  Source Web Client  : http://localhost:9080/web/client (mft_source / source_pass)" -ForegroundColor White
+Write-Host "  Source Web Admin   : http://localhost:9080/web/admin (sameermahindru69@gmail.com / Boobremon@69)" -ForegroundColor White
+Write-Host "  Dest Web Client    : http://localhost:9081/web/client (mft_dest / dest_pass)" -ForegroundColor White
+Write-Host "  Dest Web Admin     : http://localhost:9081/web/admin (myselfsammy69@gmail.com / Boobremon@70)" -ForegroundColor White
 Write-Host "  Source SFTP Port   : 2022" -ForegroundColor DarkGray
 Write-Host "  Dest SFTP Port     : 2222" -ForegroundColor DarkGray
 
