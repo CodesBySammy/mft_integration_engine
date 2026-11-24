@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,6 +73,15 @@ public class InMemoryTransferStatusRepository implements TransferStatusRepositor
             throw new IllegalArgumentException("TransferRun and runId must not be null");
         }
         runs.put(run.getRunId(), run);
+        if (runs.size() > 500) {
+            List<String> sortedKeys = runs.values().stream()
+                    .sorted(Comparator.comparing(TransferRun::getStartTime, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(TransferRun::getRunId)
+                    .toList();
+            for (int i = 0; i < sortedKeys.size() - 500; i++) {
+                runs.remove(sortedKeys.get(i));
+            }
+        }
         persistToDisk();
         if (databasePersistenceService != null) {
             databasePersistenceService.saveTransferRun(run);

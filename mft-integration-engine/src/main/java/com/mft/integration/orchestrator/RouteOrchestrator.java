@@ -138,11 +138,6 @@ public class RouteOrchestrator {
 
         String address = resolveAddress(route);
 
-        log.info("Starting execution: address=[{}], runId=[{}], mode=[{}], allowReprocessing=[{}]",
-                address, runId, route.getProcessingMode(), route.isAllowReprocessing());
-        audit(route, runId, "ROUTE_START", "-", "-", 0L, "N/A", 0L, "STARTED", "NONE",
-                "Sync initiated: " + address + " [ID: " + runId + "]");
-
         String effectivePattern = (patternOverride != null && !patternOverride.isBlank())
                 ? patternOverride
                 : route.getSourcePattern();
@@ -168,12 +163,18 @@ public class RouteOrchestrator {
                     "Discovery failed: " + e.getMessage(), List.of());
         }
 
+        // Quiet Polling: Suppress audit writes when no files are available (prevents infinite database bloat)
         if (discoveredFiles.isEmpty()) {
-            log.info("No files matching pattern [{}] discovered on [{}:{}]",
+            log.debug("No files matching pattern [{}] discovered on [{}:{}]",
                     effectivePattern, route.getSourceConnectionId(), route.getSourceDirectory());
             return new RouteExecutionResult(runId, routeId, true, 0, 0, 0, 0, startTime, Instant.now(),
                     "No files found matching pattern: " + effectivePattern, List.of());
         }
+
+        log.info("Starting execution: address=[{}], runId=[{}], filesDiscovered=[{}], mode=[{}], allowReprocessing=[{}]",
+                address, runId, discoveredFiles.size(), route.getProcessingMode(), route.isAllowReprocessing());
+        audit(route, runId, "ROUTE_START", "-", "-", 0L, "N/A", 0L, "STARTED", "NONE",
+                "Sync initiated: " + address + " [Discovered: " + discoveredFiles.size() + ", ID: " + runId + "]");
 
         List<TransferRun> completedRuns = new ArrayList<>();
         int successCount = 0;
@@ -247,9 +248,12 @@ public class RouteOrchestrator {
                 address, discoveredFiles.size(), successCount, skippedCount, failureCount, runId);
 
         log.info(summary);
-        audit(route, runId, "ROUTE_COMPLETED", "-", "-", 0L, "N/A",
-                java.time.Duration.between(startTime, endTime).toMillis(),
-                overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", "NONE", summary);
+        // Only write ROUTE_COMPLETED to audit ledger when actual operations took place
+        if (successCount > 0 || failureCount > 0) {
+            audit(route, runId, "ROUTE_COMPLETED", "-", "-", 0L, "N/A",
+                    java.time.Duration.between(startTime, endTime).toMillis(),
+                    overallSuccess ? "COMPLETED" : "PARTIAL_SUCCESS", "NONE", summary);
+        }
 
         return new RouteExecutionResult(runId, routeId, overallSuccess, discoveredFiles.size(),
                 successCount, failureCount, skippedCount, startTime, endTime, summary, completedRuns);
@@ -280,9 +284,28 @@ public class RouteOrchestrator {
 
         // Enforce minimum file size constraint (default 1024 bytes / 1 KB)
         if (actualSize < route.getMinFileSize()) {
-            String rejectMsg = String.format("File [%s] rejected: size %d bytes is below minimum allowed threshold (%d bytes / 1 KB).",
+            String rejectMsg = String.format("File [%s] rejected: size %d bytes is below minimum allowed threshold (%d bytes / 1 KB). Quarantining file.",
                     filename, actualSize, route.getMinFileSize());
             log.warn(rejectMsg);
+
+            // Safe Quarantine Pattern: Isolate poison file to prevent endless polling loop
+            try {
+                Path quarantinePath = workspaceService.resolvePath(WorkspaceDirectory.QUARANTINE, filename);
+                Files.createDirectories(quarantinePath.getParent());
+                Files.copy(localDownloadPath, quarantinePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    readAdapter.deleteFile(route.getSourceConnectionId(), remoteFile.getRemotePath());
+                    log.info("Poison pill isolated: Moved [{}] to quarantine [{}] and removed from pickup folder",
+                            filename, quarantinePath);
+                } catch (Exception de) {
+                    log.debug("Source delete during quarantine notice: {}", de.getMessage());
+                }
+                audit(route, transferRun.getRunId(), "FILE_QUARANTINED", remoteFile.getRemotePath(), quarantinePath.toString(),
+                        actualSize, "N/A", 0L, "QUARANTINED", "FILE_UNDERSIZED", rejectMsg);
+            } catch (Exception qe) {
+                log.error("Failed to quarantine undersized file [{}]: {}", filename, qe.getMessage());
+            }
+
             throw new FileProcessingException("FILE_UNDERSIZED", rejectMsg);
         }
 

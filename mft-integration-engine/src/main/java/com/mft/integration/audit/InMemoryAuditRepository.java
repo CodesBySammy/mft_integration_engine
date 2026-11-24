@@ -65,6 +65,9 @@ public class InMemoryAuditRepository implements AuditRepository {
             throw new IllegalArgumentException("AuditEvent must not be null");
         }
         events.add(event);
+        while (events.size() > 500) {
+            events.remove(0);
+        }
         persistToDisk();
         if (databasePersistenceService != null) {
             databasePersistenceService.saveAuditEvent(event);
