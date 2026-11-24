@@ -6,6 +6,9 @@ import com.mft.integration.api.dto.ApiResponse;
 import com.mft.integration.api.dto.RemoteFileDto;
 import com.mft.integration.workspace.LocalWorkspaceService;
 import com.mft.integration.workspace.WorkspaceDirectory;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +24,7 @@ import java.util.Map;
 /**
  * REST controller for remote file discovery and manual file download triggers.
  */
+@Tag(name = "Files", description = "Remote SFTP file discovery and manual download actions")
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
@@ -33,11 +37,12 @@ public class FileController {
         this.workspaceService = workspaceService;
     }
 
+    @Operation(summary = "List remote files on SFTP server", description = "Discovers files on a specified connection and directory matching an optional pattern or regex.")
     @GetMapping("/{connectionId}")
     public ResponseEntity<ApiResponse<List<RemoteFileDto>>> listRemoteFiles(
-            @PathVariable String connectionId,
-            @RequestParam(defaultValue = "/") String directory,
-            @RequestParam(defaultValue = "*") String pattern) {
+            @Parameter(description = "SFTP Connection ID") @PathVariable String connectionId,
+            @Parameter(description = "Remote directory to scan") @RequestParam(defaultValue = "/") String directory,
+            @Parameter(description = "File matching pattern or regex") @RequestParam(defaultValue = "*") String pattern) {
 
         List<RemoteFileInfo> remoteFiles = readAdapter.discoverFiles(connectionId, directory, pattern);
         List<RemoteFileDto> dtos = remoteFiles.stream()
@@ -47,11 +52,12 @@ public class FileController {
         return ResponseEntity.ok(ApiResponse.ok(dtos));
     }
 
+    @Operation(summary = "Manually download remote file", description = "Downloads a specific remote SFTP file into the engine's local downloads workspace.")
     @PostMapping("/download")
     public ResponseEntity<ApiResponse<Map<String, Object>>> downloadFile(
-            @RequestParam String connectionId,
-            @RequestParam String remotePath,
-            @RequestParam(required = false) String targetFilename) {
+            @Parameter(description = "SFTP Connection ID") @RequestParam String connectionId,
+            @Parameter(description = "Full remote path to file") @RequestParam String remotePath,
+            @Parameter(description = "Optional destination filename override") @RequestParam(required = false) String targetFilename) {
 
         String filename = (targetFilename != null && !targetFilename.isBlank())
                 ? targetFilename

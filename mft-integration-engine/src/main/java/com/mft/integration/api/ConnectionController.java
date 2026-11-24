@@ -6,6 +6,9 @@ import com.mft.integration.api.dto.ConnectionDto;
 import com.mft.integration.api.dto.ConnectionTestResultDto;
 import com.mft.integration.connection.ConnectionDefinition;
 import com.mft.integration.connection.ConnectionRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +20,7 @@ import java.util.List;
 /**
  * REST controller for inspecting SFTP connection definitions and verifying live endpoint reachability.
  */
+@Tag(name = "Connections", description = "SFTP connection management and connectivity diagnostic health checks")
 @RestController
 @RequestMapping("/api/connections")
 public class ConnectionController {
@@ -29,6 +33,7 @@ public class ConnectionController {
         this.readAdapter = readAdapter;
     }
 
+    @Operation(summary = "List all connections", description = "Retrieves all configured SFTP connection endpoints and credentials metadata.")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConnectionDto>>> getAllConnections() {
         List<ConnectionDto> connections = connectionRegistry.getAllConnections().stream()
@@ -37,14 +42,16 @@ public class ConnectionController {
         return ResponseEntity.ok(ApiResponse.ok(connections));
     }
 
+    @Operation(summary = "Get connection details", description = "Fetches configuration details for a single SFTP connection.")
     @GetMapping("/{connectionId}")
-    public ResponseEntity<ApiResponse<ConnectionDto>> getConnection(@PathVariable String connectionId) {
+    public ResponseEntity<ApiResponse<ConnectionDto>> getConnection(@Parameter(description = "Connection identifier (e.g. C_FILE_IN)") @PathVariable String connectionId) {
         ConnectionDefinition connection = connectionRegistry.getConnection(connectionId);
         return ResponseEntity.ok(ApiResponse.ok(new ConnectionDto(connection)));
     }
 
+    @Operation(summary = "Test SFTP connectivity", description = "Performs a live SSH handshake test to verify server reachability, port availability, and credentials.")
     @GetMapping("/{connectionId}/test")
-    public ResponseEntity<ApiResponse<ConnectionTestResultDto>> testConnection(@PathVariable String connectionId) {
+    public ResponseEntity<ApiResponse<ConnectionTestResultDto>> testConnection(@Parameter(description = "Connection identifier") @PathVariable String connectionId) {
         ConnectionDefinition connection = connectionRegistry.getConnection(connectionId);
         long start = System.currentTimeMillis();
         boolean reachable = readAdapter.testConnection(connectionId);

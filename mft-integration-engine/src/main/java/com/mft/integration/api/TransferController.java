@@ -9,6 +9,9 @@ import com.mft.integration.exception.MftException;
 import com.mft.integration.idempotency.IdempotencyService;
 import com.mft.integration.status.TransferRun;
 import com.mft.integration.status.TransferStatusService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +25,7 @@ import java.util.List;
 /**
  * REST controller for monitoring transfer run lifecycles and querying structured audit events.
  */
+@Tag(name = "Transfers & Audit", description = "Monitor transfer status, view run execution histories, and inspect audit logs")
 @RestController
 @RequestMapping("/api")
 public class TransferController {
@@ -36,9 +40,10 @@ public class TransferController {
         this.idempotencyService = idempotencyService;
     }
 
+    @Operation(summary = "List transfer runs", description = "Retrieves transfer execution runs, optionally filtered by route ID.")
     @GetMapping("/transfers")
     public ResponseEntity<ApiResponse<List<TransferRunDto>>> getTransfers(
-            @RequestParam(required = false) String routeId) {
+            @Parameter(description = "Optional route ID to filter runs") @RequestParam(required = false) String routeId) {
 
         List<TransferRun> runs = (routeId != null && !routeId.isBlank())
                 ? statusService.getRunsForRoute(routeId)
@@ -51,16 +56,18 @@ public class TransferController {
         return ResponseEntity.ok(ApiResponse.ok(dtos));
     }
 
+    @Operation(summary = "Get single transfer run", description = "Fetches status details for a specific transfer run by runId.")
     @GetMapping("/transfers/{runId}")
-    public ResponseEntity<ApiResponse<TransferRunDto>> getTransfer(@PathVariable String runId) {
+    public ResponseEntity<ApiResponse<TransferRunDto>> getTransfer(@Parameter(description = "Transfer run ID") @PathVariable String runId) {
         TransferRun run = statusService.getRun(runId)
                 .orElseThrow(() -> new MftException("TRANSFER_RUN_NOT_FOUND", "Transfer run not found: " + runId));
 
         return ResponseEntity.ok(ApiResponse.ok(new TransferRunDto(run)));
     }
 
+    @Operation(summary = "Get audit events for a transfer run", description = "Retrieves all audit events associated with a specific transfer run ID.")
     @GetMapping("/transfers/{runId}/audit")
-    public ResponseEntity<ApiResponse<List<AuditEventDto>>> getAuditForRun(@PathVariable String runId) {
+    public ResponseEntity<ApiResponse<List<AuditEventDto>>> getAuditForRun(@Parameter(description = "Transfer run ID") @PathVariable String runId) {
         List<AuditEvent> events = auditService.getEventsForRun(runId);
         List<AuditEventDto> dtos = events.stream()
                 .map(AuditEventDto::new)
@@ -69,10 +76,11 @@ public class TransferController {
         return ResponseEntity.ok(ApiResponse.ok(dtos));
     }
 
+    @Operation(summary = "Search all audit events", description = "Queries audit trail events across routes, connections, and transfer runs.")
     @GetMapping("/audit")
     public ResponseEntity<ApiResponse<List<AuditEventDto>>> getAuditEvents(
-            @RequestParam(required = false) String routeId,
-            @RequestParam(required = false) String runId) {
+            @Parameter(description = "Optional route ID filter") @RequestParam(required = false) String routeId,
+            @Parameter(description = "Optional run ID filter") @RequestParam(required = false) String runId) {
 
         List<AuditEvent> events;
         if (runId != null && !runId.isBlank()) {
@@ -90,6 +98,7 @@ public class TransferController {
         return ResponseEntity.ok(ApiResponse.ok(dtos));
     }
 
+    @Operation(summary = "Clear idempotency cache", description = "Resets the idempotency tracking database to allow re-transfer of existing files.")
     @PostMapping("/idempotency/clear")
     public ResponseEntity<ApiResponse<String>> clearIdempotencyCache() {
         idempotencyService.clearRecords();
