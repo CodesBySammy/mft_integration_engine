@@ -251,7 +251,7 @@ $configBObj = @{
 }
 Set-Content -Path (Join-Path $instBConfig "sftpgo.json") -Value ($configBObj | ConvertTo-Json -Depth 5) -Force
 
-# Write users_seed.json for Source (mft_source)
+# Write users_seed.json for Source (mft_source + admin)
 $seedUserAObj = @{
     users = @(
         @{
@@ -264,10 +264,18 @@ $seedUserAObj = @{
             }
         }
     )
+    admins = @(
+        @{
+            username = "admin"
+            password = "Admin1234!"
+            status = 1
+            permissions = @("*")
+        }
+    )
 }
 Set-Content -Path (Join-Path $instAConfig "users_seed.json") -Value ($seedUserAObj | ConvertTo-Json -Depth 5) -Force
 
-# Write users_seed.json for Destination (mft_destination)
+# Write users_seed.json for Destination (mft_destination + admin)
 $seedUserBObj = @{
     users = @(
         @{
@@ -278,6 +286,14 @@ $seedUserBObj = @{
             permissions = @{
                 "/" = @("list", "download", "upload", "overwrite", "rename", "create_dirs", "delete")
             }
+        }
+    )
+    admins = @(
+        @{
+            username = "admin"
+            password = "Admin1234!"
+            status = 1
+            permissions = @("*")
         }
     )
 }
