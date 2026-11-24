@@ -286,4 +286,16 @@ public class DatabasePersistenceService {
         int safeLimit = Math.min(Math.max(1, limit), 1000);
         return jdbcTemplate.queryForList("SELECT * FROM mft_idempotency_records ORDER BY first_processed_at DESC LIMIT ?", safeLimit);
     }
+
+    public void purgeAllDatabaseData() {
+        if (jdbcTemplate == null) return;
+        try {
+            jdbcTemplate.execute("DELETE FROM mft_audit_events");
+            jdbcTemplate.execute("DELETE FROM mft_transfer_runs");
+            jdbcTemplate.execute("DELETE FROM mft_idempotency_records");
+            log.info("Relational database tables successfully purged.");
+        } catch (Exception e) {
+            log.warn("Failed to purge relational database tables: {}", e.getMessage());
+        }
+    }
 }
